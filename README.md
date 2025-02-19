@@ -5,6 +5,8 @@
   |  |  '  ''  '.-'  `)|  | |  | 
   `--'   `----' `----' `--' `--'
 ```
+
+# !!! Literally Unusable Right Now. Actually Still in Its Conception Stage !!!
 # Turtle Shell (tush)
 
 Simple shell with python-style string formatting and ability to do simple maths.
