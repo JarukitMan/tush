@@ -65,7 +65,7 @@ ___
 2. Features.
     2. History-based auto-suggestions.
 3. Special keybinds. (command = key)
-4. Init script. Both on login and not. (profile and rc) (whatever that means)
+4. Init script. Both on login and not. (profile and rc) (login means interactive)
 5. Variables.
     1. Just variables.
     2. Cache path.
