@@ -70,6 +70,8 @@ ___
     1. Just variables.
     2. Cache path.
     3. Exec path.
+    4. Config path.
+    5. History path.
 ___
 
 ## Turtle Shell Scripting Language 1.0 Specifications.
@@ -82,7 +84,7 @@ Five token types: Literals, Variables, Operators, Closures, Pipers.
 * flt - The floating number type. `(1.0 -2.0 2.5 ...)`
 * bln - The boolean value type. `(true false)`
 * chr - The character type. `('a' 'b' 'c')`
-* tup - The tuple type, a collection of values of any types. One-long arrays are automatically unpacked. `(([a b c] d 'e') (a "bc") ('d' 5))`
+* tup - The tuple type, a collection of values of any types. One-long tuples are automatically unpacked, and a tuple with no elements or only empty tuples as elements are dissolved into empty tuples. `(([a b c] d 'e') (a "bc") ('d' 5))`
 * arr - The array type, a collection of values from a single type. `([a1 a2 a3] [a4 a5] [a6 a7])`
 * typ - The type type, an enumeration of all types.
 * fmt - Formatted Strings, stores the variable name and updates alongside the variables. `f"1 + 1 = {1+1}"`
@@ -161,7 +163,7 @@ Base Operators:
 
 1. [...] <------ These two aren't really closures, but they can contain statements inside that are then packed into them.
 2. (...) <--/        And tuples happen to unpack when they have a single value inside of them.
-3. {...} -- Used to package multiple (or single) lines of codes to send to control flow/definition operations.
+3. {...} -- Literally an alias for tuples.
 
 #### Pipers
 
