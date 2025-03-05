@@ -1,4 +1,4 @@
-# Simple INI Manager/Parser
+# INI Manager/Parser (IMP)
 
 You do this one, carpito.\
 You write me the requirements. Specs, if you will.\

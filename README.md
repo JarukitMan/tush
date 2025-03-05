@@ -16,10 +16,13 @@ ___
 ## Abnormalities:
 
 1. (...) instead of $(...) - No idea why shells went with that approach,\
-   it's a real bother to write in the shell.
+    it's a real bother to write in the shell.
 2. f".{...}.." for formatted strings - Just like in python.\
-   Strings in normal bash is very, very annoying.
+    Strings in normal bash is very, very annoying.
 3. Vim-style text navigation - Personal preferences.
+4. Thick shell. Similar to vim's "q:" screen. The shell clears the stdin part of the screen and\
+    lets processes "take over" while keeping track of the stdin and stdout to put in the buffer later.\
+    It then rewrites the stdin area buffer.
 ___
 
 ## Features, period.
@@ -49,7 +52,7 @@ ___
 23. Customizable prompt.
 24. Flushing ANSI characters at output end.
 25. Fuzzy Search.
-26. Login. (Whatever that means)
+26. Login.
 27. Variable Type Inference. (command, flag, number, string, etc.)
 28. Foreground/Background Processes.
 ___
@@ -57,15 +60,18 @@ ___
 ## What can be configured? (tush.ini)
 
 1. Styles.
-    1. Indicator.
-    2. Path style. (0 for none, -1 for full, positive number for that many directories deep.)
+    1. Indicator. (Default = "<[path]> ")
+    2. Path style. (Default = 1. 0 for none, -1 for full, positive number for that many directories deep.)
     3. Styles for certain file types (executable, link, etc.)
     4. Auto-complete style. (Underline, color, whatever. Just like the above.)
-    5. Auto-complete size. (negative to show all, 0 to show none, the rest to show that many lines.)
+    5. Auto-complete size. (Default = -1. negative to show all, 0 to show none, the rest to show that many lines.)
+    6. Input height. (Default = 5. Anything less than 1 is ignored.)
+    7. Scroll zone offset. (Default = 1. Negative means center at all times.)
 2. Features.
-    2. History-based auto-suggestions.
+    1. History-based auto-suggestions.
+    2. Split input & Output. (Default = true)
 3. Special keybinds. (command = key)
-4. Init script. Both on login and not. (profile and rc) (login means interactive)
+4. Init script. Both on login and not. (profile and rc) (login means the first shell)
 5. Variables.
     1. Just variables.
     2. Cache path.
@@ -84,7 +90,9 @@ Five token types: Literals, Variables, Operators, Closures, Pipers.
 * flt - The floating number type. `(1.0 -2.0 2.5 ...)`
 * bln - The boolean value type. `(true false)`
 * chr - The character type. `('a' 'b' 'c')`
-* tup - The tuple type, a collection of values of any types. One-long tuples are automatically unpacked, and a tuple with no elements or only empty tuples as elements are dissolved into empty tuples. `(([a b c] d 'e') (a "bc") ('d' 5))`
+* tup - The tuple type, a collection of values of any types.\
+    One-long tuples are automatically unpacked, and a tuple with no elements or only empty tuples as elements are dissolved into empty tuples.\
+    `(([a b c] d 'e') (a "bc") ('d' 5))`
 * arr - The array type, a collection of values from a single type. `([a1 a2 a3] [a4 a5] [a6 a7])`
 * typ - The type type, an enumeration of all types.
 * fmt - Formatted Strings, stores the variable name and updates alongside the variables. `f"1 + 1 = {1+1}"`
@@ -96,15 +104,17 @@ Five token types: Literals, Variables, Operators, Closures, Pipers.
 
 #### Variables
 
-Defined by `let x = y`, variables are values that can be assigned to, and are replaced by literals contained within when used in an expression at runtime.
-Their types are derived, but they are static and cannot be changed. However, a tuple is special in which a variable can be both (a b) and (a b c),
-but there may be functions that only accept either (a b) or (a b c).
+Defined by `let x = y`, variables are values that can be assigned to,\
+and are replaced by literals contained within when used in an expression at runtime\
+Their types are derived, but they are static and cannot be changed.\
 
 ```
 let one = 1 #int
 let two = two #str
 let three = ['t' 'h' 'r' 'e' 'e'] #[chr]
-let four = ("fo" 'u' 'r') #tuple or (str chr chr)
+let four = ("fo" 'u' 'r') #(str chr chr)
+let fourthree = four + three #(str chr chr [chr])
+four = fourthree #ERROR: Type Mismatch.
 ```
 
 #### Operations
