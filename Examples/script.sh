@@ -16,7 +16,7 @@ for i in [0..100]
 	}
 }
 
-echo "Something in the middle lol"
+echo "Something \"in the middle\" lol"
 
 else {
 	echo done for real #we know this is not referring to a variable because we know
@@ -24,4 +24,12 @@ else {
 			   #and this sentence is not a variable. It even contains space.
 }
 
+#Loop a through z
+
+for char in ['a'..'z'] {
+	char
+}
+
+That's cool.
+This's' not cool...
 #exit

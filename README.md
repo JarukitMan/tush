@@ -30,7 +30,7 @@ ___
 1. Calling other programs.
 2. Navigation.
 3. Input line highlighting.
-4. Piping, in all kinds of ways. ( -> ; | => (<<< replaced by <- because here files are wack just redirect the cat'd here string) (...))
+4. Piping, in all kinds of ways. ( -> , | => (<<< replaced by <- because here files are wack just redirect the cat'd here string) (...))
 5. Simple regex. (? * [...] ...)
 6. History.
 7. Tab-completion.
@@ -150,20 +150,20 @@ Base Operators:
     * \* -- Duplicates the structure by a specified number of times.
     * / -- Divides the structure into a specified number of parts equally. (The 'Leftover' parts are put at the back. EX. `"Hello World"/3 -> ["Hel" "lo " "Wor" "ld"]`)
     * len -- Returns the length of the structure.
-    * . -- accesses the structure. Can be done with either a number or an array. `let arr = [[1 2 3] [4 5 6] [7 8 9]] ; echo arr.2.[1 2] #8 9`
+    * . -- accesses the structure. Can be done with either a number or an array. `let arr = [[1 2 3] [4 5 6] [7 8 9]], echo arr.2.[1 2] #8 9`
     * [a..b] -- creates a range of numbers or "enumerable" types (I don't know the proper word), incremented by its version of 1.
     * [a,a+d..b] -- creates a range, but with a specified increment value.
 * Flow
     * if -- Executes the following {...} block depending on if the boolean statement returns true. `if **truth statement** {...}`
     * for -- Works as either a C-like for loop that takes in three statements, or a Python-like for loop that takes in an iterator.\
-        `for let i = 0; i < n; i = i + 1 {...}` or `for i in [0..n] {...}`
+        `for let i = 0, i < n, i = i + 1 {...}` or `for i in [0..n] {...}`
     * while -- Executes the following {...} block while the boolean statement returns true. `while **truth statement** {...}`
     * else -- If the global truth value the interpreter keeps for checking the above functions is false, execute the {...} block following it. `else {...}`
     * return -- Returns the value immediately behind it from a function.
     * break -- Immediately terminates the loop being executed.
     * continue -- Immediately starts the next iteration of the loop being executed.
 * Definition
-    * let -- Defines a variable. The type of the variable should be known at this time. `let x: [type] = []; let y: type; let z = thing`
+    * let -- Defines a variable. The type of the variable should be known at this time. `let x: [type] = [], let y: type, let z = thing`
     * fn -- Defines a function, composed on these tokens in any order: `fn **tokens** {...}`
         1. function\_name (may only be used once.)
         2. type varname
@@ -177,7 +177,7 @@ Base Operators:
 
 #### Pipers
 
-1. ; -- Ends an expression, used in place of newline in case the user can't or doesn't want to use a newline.
+1. , -- Ends an expression, used in place of newline in case the user can't or doesn't want to use a newline.
 2. | -- Pipes output as argument for the next expression.
 3. <- -- Here strings, replaces the stdin of the expression to the left with the string to the right.
 4. -> -- Write to file, replaces the contents of the target file on the right side with the left side.
