@@ -2,7 +2,8 @@
 #Doesn't work yet, obviously.
 
 fastfetch
-echo "That's Crazy."
+echo "That's
+Crazy."
 1 + 2 - 3 * 4 + 5 #implicit echo
 
 for i in [0..100] 
@@ -16,7 +17,7 @@ for i in [0..100]
 	}
 }
 
-echo "Something \"in the middle\" lol"
+echo "Something \"in \nthe \middle\" lol\\"
 
 else {
 	echo done for real #we know this is not referring to a variable because we know
@@ -32,4 +33,4 @@ for char in ['a'..'z'] {
 
 That's cool.
 This's' not cool...
-#exit
+ls

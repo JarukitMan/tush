@@ -152,7 +152,6 @@ Base Operators:
     * len -- Returns the length of the structure.
     * . -- accesses the structure. Can be done with either a number or an array. `let arr = [[1 2 3] [4 5 6] [7 8 9]], echo arr.2.[1 2] #8 9`
     * [a..b] -- creates a range of numbers or "enumerable" types (I don't know the proper word), incremented by its version of 1.
-    * [a,a+d..b] -- creates a range, but with a specified increment value.
 * Flow
     * if -- Executes the following {...} block depending on if the boolean statement returns true. `if **truth statement** {...}`
     * for -- Works as either a C-like for loop that takes in three statements, or a Python-like for loop that takes in an iterator.\
@@ -163,7 +162,7 @@ Base Operators:
     * break -- Immediately terminates the loop being executed.
     * continue -- Immediately starts the next iteration of the loop being executed.
 * Definition
-    * let -- Defines a variable. The type of the variable should be known at this time. `let x: [type] = [], let y: type, let z = thing`
+    * let -- Defines a variable. The type of the variable should be known at this time. `let [type] x = [], let type y, let z = thing`
     * fn -- Defines a function, composed on these tokens in any order: `fn **tokens** {...}`
         1. function\_name (may only be used once.)
         2. type varname
