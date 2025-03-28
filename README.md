@@ -70,6 +70,7 @@ ___
 2. Features.
     1. History-based auto-suggestions.
     2. Split input & Output. (Default = true)
+    3. Sorting order.
 3. Special keybinds. (command = key)
 4. Init script. Both on login and not. (profile and rc) (login means the first shell)
 5. Variables.
@@ -91,8 +92,10 @@ Five token types: Literals, Variables, Operators, Closures, Pipers.
 * bln - The boolean value type. `(true false)`
 * chr - The character type. `('a' 'b' 'c')`
 * tup - The tuple type, a collection of values of any types.\
-    One-long tuples are automatically unpacked, and a tuple with no elements or only empty tuples as elements are dissolved into empty tuples.\
+    One-long tuples are automatically unpacked, and a tuple with no elements is simply ignored in all cases.\
     `(([a b c] d 'e') (a "bc") ('d' 5))`
+    `(1, (), 2 + 3) == ((1) (2 + 3)) == (1, 5) == (1 5)`
+    `2 + () 3 == 5`
 * arr - The array type, a collection of values from a single type. `([a1 a2 a3] [a4 a5] [a6 a7])`
 * typ - The type type, an enumeration of all types.
 * fmt - Formatted Strings, stores the variable name and updates alongside the variables. `f"1 + 1 = {1+1}"`
@@ -167,6 +170,8 @@ Base Operators:
         1. function\_name (may only be used once.)
         2. type varname
         3. (type1 var1 type2 var2)
+      **Probably will not Implement Since Shadowing Exists**
+    * unset -- Unsets a variable and frees it from memory.
 
 #### Closures
 
@@ -196,7 +201,7 @@ Base Operators:
 9. Control Flow
 10. Definition
 11. Command
-12. Pipers
+12. Pipers ( "<-" > the rest)
 
 #### Note:
 If the expression leaves some values, those values are printed.
