@@ -87,29 +87,26 @@ Five token types: Literals, Variables, Operators, Closures, Pipers.
 
 #### Literals
 
-* int - The integer type. `(1 -2 3 ...)`
-* flt - The floating number type. `(1.0 -2.0 2.5 ...)`
-* bln - The boolean value type. `(true false)`
-* chr - The character type. `('a' 'b' 'c')`
+* int - The integer type. `1 -2 3 ...`
+* flt - The floating number type. `1.0 -2.0 2.5 ...`
+* bln - The boolean value type. `true false`
+* chr - The character type. `'a' 'b' 'c' ...`
 * tup - The tuple type, a collection of values of any types.\
-    One-long tuples are automatically unpacked, and a tuple with no elements is simply ignored in all cases.\
+    One-long tuples are automatically unpacked.\
     `(([a b c] d 'e') (a "bc") ('d' 5))`
-    `(1, (), 2 + 3) == ((1) (2 + 3)) == (1, 5) == (1 5)`
-    `2 + () 3 == 5`
-* arr - The array type, a collection of values from a single type. `([a1 a2 a3] [a4 a5] [a6 a7])`
-* typ - The type type, an enumeration of all types.
+    `(1, 2 + 3) == ((1) (2 + 3)) == (1, 5) == (1 5)`
+* arr - The array type, a collection of values from a single type. `[a1 a2 a3] [a4 a5] [b1 b2] ...`
+* typ - The type type, an enumeration of all types. `int flt bln ...`
 * fmt - Formatted Strings, stores the variable name and updates alongside the variables. `f"1 + 1 = {1+1}"`
 * str - Normal Strings, defined either with or without quotes. `This sentence has "four strings"`
-* pth - The file path type, can be enumerated if the files are from the same directory. `(~/CloseToHome Relative/Folder /usr/bin/rm)`
-* cmd - The command type represents commands. Defined by\
-        1. Being the first token in a line and\
-        2. Matching a filename from PATH or a shell-defined "command". `(ls which time)`
+* pth - The file path type, can be enumerated if the files are from the same directory. `~/CloseToHome Relative/Folder /root`
 
 #### Variables
 
 Defined by `let x = y`, variables are values that can be assigned to,\
 and are replaced by literals contained within when used in an expression at runtime\
 Their types are derived, but they are static and cannot be changed.\
+Variables only exist within their tuple scope or any expression nested inside.
 
 ```
 let one = 1 #int
@@ -120,13 +117,26 @@ let fourthree = four + three #(str chr chr [chr])
 four = fourthree #ERROR: Type Mismatch.
 ```
 
+However, it is possible to "shadow" variables, reusing the same name for two different variables.
+
+```
+let x = int(read)
+if x < 100 {
+    let x = "Something else"
+    echo x
+}
+x = x + 10
+```
+This snippet of code is legal, because the "let x = "Something else"" line declares a new variable with the name x within the scope\
+and that x is destroyed at the end of the scope, as it is a local variable.
+
 #### Operations
 
 Operations are split into two types, base and defined.
 
 Base Operators:
 * IO
-    * read
+    * read -- reads a line of input from the stdin into a str.
 * Arithmatic
     * \+ -- adds two numbers together
     * \- -- subtracts the second number from the first
@@ -149,44 +159,80 @@ Base Operators:
     * ...
 * Structural
     * \+ -- Concatenates the two of the same kind of structure, with the exception of tuples where all entries are appended as-is. `((a b) + (c d) -> (a b (c d)))`
-    * \- -- Drops a specified number of elements from the back of the structure.
-    * \* -- Duplicates the structure by a specified number of times.
-    * / -- Divides the structure into a specified number of parts equally. (The 'Leftover' parts are put at the back. EX. `"Hello World"/3 -> ["Hel" "lo " "Wor" "ld"]`)
-    * len -- Returns the length of the structure.
+    * \- -- Drops a specified number of elements from the back of the structure. `(a b c) - 2 -> (a) -> a`
+    * \* -- Duplicates the structure by a specified number of times. `[a1 a2 a3] * 3 -> [a1 a2 a3 a1 a2 a3 a1 a2 a3]`
+    * / -- Divides the structure into a specified number of parts equally. Rounded up. `"Hello World"/4 -> ["Hel" "lo " "Wor" "ld"]`
+    * len -- Returns the length of the structure. `len [1..10] -> 10`
     * . -- accesses the structure. Can be done with either a number or an array. `let arr = [[1 2 3] [4 5 6] [7 8 9]], echo arr.2.[1 2] #8 9`
-    * [a..b] -- creates a range of numbers or "enumerable" types (I don't know the proper word), incremented by its version of 1.
+    * [a..b] -- creates a range of numbers or "enumerable" types, incremented by its version of 1.
 * Flow
-    * if -- Executes the following {...} block depending on if the boolean statement returns true. `if **truth statement** {...}`
+    * if -- Executes the following tuple depending on if the boolean statement returns true. `if **truth statement** {...}`
     * for -- Works as either a C-like for loop that takes in three statements, or a Python-like for loop that takes in an iterator.\
         `for let i = 0, i < n, i = i + 1 {...}` or `for i in [0..n] {...}`
-    * while -- Executes the following {...} block while the boolean statement returns true. `while **truth statement** {...}`
-    * else -- If the global truth value the interpreter keeps for checking the above functions is false, execute the {...} block following it. `else {...}`
-    * return -- Returns the value immediately behind it from a function.
+    * while -- Executes the following tuple while the boolean statement returns true. `while **truth statement** {...}`
+    * else -- If the global truth value the interpreter keeps for checking the above functions is false, execute the tuple following it. `else {...}`
+    * return -- Returns the value immediately behind it from a function or a tuple.\
+                All possible branches must contain a return that returns the same type when used in a tuple or a function.
     * break -- Immediately terminates the loop being executed.
     * continue -- Immediately starts the next iteration of the loop being executed.
 * Definition
-    * let -- Defines a variable. The type of the variable should be known at this time. `let [type] x = [], let type y, let z = thing`
+    * let -- Defines a variable. The type of the variable should be obvious for the interpreter to infer it. Otherwise, denote the type. `let [type] x = [], let type y, let z = thing`
     * fn -- Defines a function, composed on these tokens in any order: `fn **tokens** {...}`
         1. function\_name (may only be used once.)
         2. type varname
         3. (type1 var1 type2 var2)
-      **Probably will not Implement Since Shadowing Exists**
-    * unset -- Unsets a variable and frees it from memory.
+      ```
+      fn int a add int b { return a + b }
+      fn mpy (int a int b) {
+          let acc = 0
+          for i in [0..a] {
+              acc = acc + b
+          }
+          return acc
+      }
+      ```
+      A function has access to any in-scope variables declared before it.
+      Operators can also be shadowed, though an earlier definition will be matched if the input/output types don't match.
+      ```
+      fn add int a int b { return str(a + b) }
+      fn add int a int b { return a + b }
+      fn add int a int b int c { return a + b + c }
+      add 1 2
+      add 1 2 3
+      echo "Hello, " + (add 1 2)
+      ```
+      Note that there is a special variadic type (...) that consumes all input into a tuple.
+      ```
+      fn addall (...) nums ( let acc = 0, for num in nums (if typ num == int || typ num == flt (acc = acc + num)), return acc)
+      addall 1 2 3 4 5 #15
+      ```
+      It is quite error-prone. So use it carefully.
+      **Probably will not Implement Since Shadowing Exists, and Same Scope Shadowing Automatically Unsets the Previous Definition**
+    * unset -- Unsets a variable and frees it from memory. Only works on variables of the same scope.
 
 #### Closures
 
-1. [...] <------ These two aren't really closures, but they can contain statements inside that are then packed into them.
-2. (...) <--/        And tuples happen to unpack when they have a single value inside of them.
-3. {...} -- Literally an alias for tuples.
+1. [...] -- arrays
+2. (...) -- tuples
+3. {...} -- an alias for tuples.
+
+Tuples are evaluated when a value is needed, so not when defining a function or in a control-flow statement.
+However, when a tuple is evaluated. You'd end up with a bunch of intermediate garbage. Like `((), (), 3)` when you write `{let x = 1, let y = 2, x + y}`.
+That is why the `return` operator is used to replace the output value of the tuple with the value after it.
+`{let x = 1, let y = 2, return x + y}` will now become just `(3)`, which is equivalent to `3`
+With locality rules, x and y are deallocated after the tuple is done evaluating.
+
+When they are used in control-flow statements or function definitions,
+it would just be saved as `{let x = 1, let y = 2, return x + y}` and not evaluated until needed.
 
 #### Pipers
 
-1. , -- Ends an expression, used in place of newline in case the user can't or doesn't want to use a newline.
-2. | -- Pipes output as argument for the next expression.
-3. <- -- Here strings, replaces the stdin of the expression to the left with the string to the right.
-4. -> -- Write to file, replaces the contents of the target file on the right side with the left side.
-5. => -- Append to file, adds the left side to the end of the file named the right side of the piper.
-6. & -- Sends a job to the background, not waiting for it to be over before accepting the next input.
+1. , -- Ends an expression, used in place of newline in case the user can't or doesn't want to use a newline. `echo "Hello", echo "World"`
+2. | -- Pipes output as input for the next expression. `echo Hello World | cat`
+3. <- -- Here strings, replaces the stdin of the expression to the left with the string to the right. `cat <- "Hello World"`
+4. -> -- Write to file, replaces the contents of the target file on the right side with the left side. `echo Hello World -> hello.txt`
+5. => -- Append to file, adds the left side to the end of the file named the right side of the piper. `echo "\nAnother Line" => hello.txt, cat hello.txt`
+6. & -- Sends a job to the background, not waiting for it to be over before accepting the next input. `echo theBeeMovieScript.txt & vim`
 
 #### Operator precedence. High to low.
 
@@ -200,16 +246,23 @@ Base Operators:
 8. Boolean
 9. Control Flow
 10. Definition
-11. Command
+11. Variadic functions (Includes external calls)
 12. Pipers ( "<-" > the rest)
 
 #### Note:
-If the expression leaves some values, those values are printed.
+If the expression leaves some values, those values are printed unless they're strings or executable filepaths, which would be called as an external program.
+Internally, all values are packed into tuples with operations as seperators. So operations that take no input on either (or both) side(s) also accept zero tuples.
+```
+a + b is (a) + (b)
+len x is () len (x)
+```
+With the lack of error handling (until structs and enums are added), error messages are simply printed and the expression is aborted.\
+Changes made are not reverted.
 ___
 
-### Planned features.
+### Future planned features.
 - translating markdown (and colors) to ansi in formatted strings would be banger.
 - rust style enum and match, which implies switch case.
 - I don't think I'll go as far as struct and impl but eh we'll see.
 - seperate, static string typing for inside job strings [char] -> Command fString String Flag Argument Path
-- slices, anonymous functions, and dynamic input functions
+- slices, anonymous functions, libraries. (Though I think I'd rather call external processes)
