@@ -206,7 +206,7 @@ Base Operators:
       fn addall (...) nums ( let acc = 0, for num in nums (if typ num == int || typ num == flt (acc = acc + num)), return acc)
       addall 1 2 3 4 5 #15
       ```
-      It is quite error-prone. So use it carefully.
+      It is quite error-prone. So use it carefully.\
       **Probably will not Implement Since Shadowing Exists, and Same Scope Shadowing Automatically Unsets the Previous Definition**
     * unset -- Unsets a variable and frees it from memory. Only works on variables of the same scope.
 
