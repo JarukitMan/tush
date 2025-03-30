@@ -1,11 +1,14 @@
 import qualified System.Environment as Env
 
 main = do
-  env <- Env.getArgs
-  putStrLn $ "Args: " ++ (show env)
-  content <- readFile $ head env
-  putStrLn $ "Content: " ++ content
-  putStrLn $ (combine . (map show) . fst . (lexMultiple '_')) content
+  args <- Env.getArgs
+  if not (null args) then do
+    putStrLn $ "Args: " ++ (show args)
+    content <- readFile $ head args
+    putStrLn $ "Content: " ++ content
+    putStrLn $ (combine . (map show) . fst . (lexMultiple 'q')) content
+  else
+    interact (combine . (map show) . fst . (lexMultiple 'q'))
 
 combine :: [String] -> String
 combine [] = []

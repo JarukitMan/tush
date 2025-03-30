@@ -172,11 +172,14 @@ Base Operators:
     * while -- Executes the following tuple while the boolean statement returns true. `while **truth statement** {...}`
     * else -- If the global truth value the interpreter keeps for checking the above functions is false, execute the tuple following it. `else {...}`
     * return -- Returns the value immediately behind it from a function or a tuple.\
-                All possible branches must contain a return that returns the same type when used in a tuple or a function.
+                All possible branches must contain a return that returns the same type when used in a tuple or a function.\
+                With the current implementation of `return`, since the interpreter must know the values of each function or tuple,\
+                if an expression evaluates to the return type of the function or tuple, it will immediatey return.\
+                To avoid this, use `let _ =` to convert the final result of the expression to `()`.
     * break -- Immediately terminates the loop being executed.
     * continue -- Immediately starts the next iteration of the loop being executed.
 * Definition
-    * let -- Defines a variable. The type of the variable should be obvious for the interpreter to infer it. Otherwise, denote the type. `let [type] x = [], let type y, let z = thing`
+    * let -- Defines a variable. If the type is obvious, the interpreter could infer it. Otherwise, denote the type. `let [type] x = [], let type y, let z = thing`
     * fn -- Defines a function, composed on these tokens in any order: `fn **tokens** {...}`
         1. function\_name (may only be used once.)
         2. type varname
@@ -191,8 +194,9 @@ Base Operators:
           return acc
       }
       ```
-      A function has access to any in-scope variables declared before it.
-      Operators can also be shadowed, though an earlier definition will be matched if the input/output types don't match.
+      A function has access to any in-scope variables declared before it.\
+      Operators can also be shadowed, though an earlier definition will be matched if the input/output types don't match.\
+      It follows roughly the same rules as shadowing.\
       ```
       fn add int a int b { return str(a + b) }
       fn add int a int b { return a + b }
@@ -206,9 +210,9 @@ Base Operators:
       fn addall (...) nums ( let acc = 0, for num in nums (if typ num == int || typ num == flt (acc = acc + num)), return acc)
       addall 1 2 3 4 5 #15
       ```
-      It is quite error-prone. So use it carefully.\
+      It is quite error-prone. So use it carefully.
+    * unset -- Unsets a variable and frees it from memory. Only works on variables of the same scope.\
       **Probably will not Implement Since Shadowing Exists, and Same Scope Shadowing Automatically Unsets the Previous Definition**
-    * unset -- Unsets a variable and frees it from memory. Only works on variables of the same scope.
 
 #### Closures
 
@@ -234,6 +238,9 @@ it would just be saved as `{let x = 1, let y = 2, return x + y}` and not evaluat
 5. => -- Append to file, adds the left side to the end of the file named the right side of the piper. `echo "\nAnother Line" => hello.txt, cat hello.txt`
 6. & -- Sends a job to the background, not waiting for it to be over before accepting the next input. `echo theBeeMovieScript.txt & vim`
 
+Pipers are basically whatever ; > >> <<< were in bash. I don't know their names.
+They should behave the same in which expressions that contain errors are skipped while the rest of the program is executed normally.
+
 #### Operator precedence. High to low.
 
 1. Closure
@@ -257,7 +264,9 @@ a + b is (a) + (b)
 len x is () len (x)
 ```
 With the lack of error handling (until structs and enums are added), error messages are simply printed and the expression is aborted.\
-Changes made are not reverted.
+Changes made are not reverted.\
+Currently, all values are passed as copies in operations. This may lead to more memory usage,\
+but I already said it would be slow and heavy, so I'm not bothering to change it.
 ___
 
 ### Future planned features.
