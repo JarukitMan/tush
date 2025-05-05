@@ -180,12 +180,12 @@ Base Operators:
     * continue -- Immediately starts the next iteration of the loop being executed.
 * Definition
     * let -- Defines a variable. If the type is obvious, the interpreter could infer it. Otherwise, denote the type. `let [type] x = [], let type y, let z = thing`
-    * fn -- Defines a function, composed on these tokens in any order: `fn **tokens** {...}`
+    * fn -- Defines a function, composed on these tokens in any order: `fn [precendence] **tokens** {...}`
         1. function\_name (may only be used once.)
         2. type varname
         3. (type1 var1 type2 var2)
       ```
-      fn int a add int b { return a + b }
+      fn 1 int a add int b { a + b }
       fn mpy (int a int b) {
           let acc = 0
           for i in [0..a] {
@@ -194,6 +194,7 @@ Base Operators:
           return acc
       }
       ```
+      The [precendence] number (rank) is an unsigned 8-bit integer. Operations with a higher rank will be done before operations with a rank.
       A function has access to any in-scope variables declared before it.\
       Operators can also be shadowed, though an earlier definition will be matched if the input/output types don't match.\
       It follows roughly the same rules as shadowing.\
@@ -243,18 +244,18 @@ They should behave the same in which expressions that contain errors are skipped
 
 #### Operator precedence. High to low.
 
-1. Closure
-2. IO
-3. Structural (except for range)
-4. Type
-5. Defined operators (functions)
+255. Closure
+10. IO
+9. Structural (except for range)
+8. Type
+7. (default) User-defined operators (functions)
 6. Arithmatic
-7. Range
-8. Boolean
-9. Control Flow
-10. Definition
-11. Variadic functions (Includes external calls)
-12. Pipers ( "<-" > the rest)
+5. Range
+4. Boolean
+3. Control Flow
+2. Definition
+1. Variadic functions (Includes external calls)
+0. Pipers ( "<-" > the rest)
 
 #### Note:
 If the expression leaves some values, those values are printed unless they're strings or executable filepaths, which would be called as an external program.
@@ -267,6 +268,7 @@ With the lack of error handling (until structs and enums are added), error messa
 Changes made are not reverted.\
 Currently, all values are passed as copies in operations. This may lead to more memory usage,\
 but I already said it would be slow and heavy, so I'm not bothering to change it.
+closures should capture the stdout (and stderr) of the commands executed into strings.
 ___
 
 ### Future planned features.
