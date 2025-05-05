@@ -13,6 +13,9 @@ Simple shell with python-style string formatting and ability to do simple maths.
 Shipped alongside the Erminal, (hopefully).
 ___
 
+## Dependencies
+- brick
+
 ## Abnormalities:
 
 1. (...) instead of $(...) - No idea why shells went with that approach,\
