@@ -6,6 +6,12 @@
   `--'   `----' `----' `--' `--'
 ```
 
+- rust style enum and match, which implies switch case.
+- I don't think I'll go as far as struct and impl but eh we'll see.
+- seperate, static string typing for inside job strings [char] -> Command fString String Flag Argument Path.
+- slices, anonymous functions, libraries. (Though I think I'd rather call external processes).
+- Compilation for the scripting language.
+- Tree-sitter or language server protocol integration.
 # !!! Literally Unusable Right Now. Actually Still in Its Conception Stage !!!
 # Turtle Shell (tush)
 
@@ -261,6 +267,7 @@ They should behave the same in which expressions that contain errors are skipped
 0. Pipers ( "<-" > the rest)
 
 #### Note:
+
 If the expression leaves some values, those values are printed unless they're strings or executable filepaths, which would be called as an external program.
 Internally, all values are packed into tuples with operations as seperators. So operations that take no input on either (or both) side(s) also accept zero tuples.
 ```
@@ -275,8 +282,18 @@ closures should capture the stdout (and stderr) of the commands executed into st
 ___
 
 ### Future planned features.
+
+#### Shell part.
+
 - translating markdown (and colors) to ansi in formatted strings would be banger.
+- Include a wrapper for other interactive shells.
+- Scratch paper.
+
+#### Language part.
+
 - rust style enum and match, which implies switch case.
 - I don't think I'll go as far as struct and impl but eh we'll see.
-- seperate, static string typing for inside job strings [char] -> Command fString String Flag Argument Path
-- slices, anonymous functions, libraries. (Though I think I'd rather call external processes)
+- seperate, static string typing for inside job strings [char] -> Command fString String Flag Argument Path.
+- slices, anonymous functions, libraries. (Though I think I'd rather call external processes).
+- Compilation for the scripting language.
+- Tree-sitter or language server protocol integration.
