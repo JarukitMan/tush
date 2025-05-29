@@ -1,10 +1,25 @@
 module Misc where
 
+allRight :: [Either a b] -> Either a [b]
+allRight [] = Right []
+allRight (x:xs) =
+      case x of
+        Left err -> Left err
+        Right x' ->
+          case allRight xs of
+            Left err  -> Left err
+            Right xs' -> Right (x':xs')
+
+dupes :: (Eq a) => [a] -> Bool
+dupes [] = True
+dupes [_] = True
+dupes (x1:x2:xs) = x1 == x2 && dupes (x2:xs)
+
 isInt :: String -> Bool
 isInt [] = True
 isInt (x:xs) = if x `elem` ['0'..'9'] then isInt xs else False
 
-intMaybe :: String -> Maybe Int
+intMaybe :: String -> Maybe Integer
 intMaybe x = if isInt x then Just $ read x else Nothing
 
 blnMaybe :: String -> Maybe Bool
@@ -19,16 +34,13 @@ chrMaybe ('\'':x:'\'':[]) = Just x
 chrMaybe ('\'':'\\':x:'\'':[]) = Just $ toEsc x
 chrMaybe _ = Nothing
 
-pthMaybe :: String -> Maybe [String]
-pthMaybe xs =
-  if x `elem` "./*?"
-  then Just $ pieces (== '/') xs
+-- Prototype version. Real version should query from a directory.
+pthMaybe :: String -> Maybe FilePath
+pthMaybe [] = Nothing
+pthMaybe str =
+  if '/' `elem` str || str == "~"
+  then Just str
   else Nothing
-  where
-    x =
-      case headMaybe xs of
-        Just x' -> x'
-        Nothing -> '\0'
 
 pieces :: (Char -> Bool) -> String -> [String]
 pieces _ [] = []
@@ -48,9 +60,9 @@ splitWith :: (a -> Bool) -> [a] -> ([a], [a])
 splitWith _ [] = ([], [])
 splitWith f list@(x:xs) =
   if f x
-  then ([], xs)
+  then ([], list)
   else (x:front, back)
-  where (front, back) = splitWith f list
+  where (front, back) = splitWith f xs
 
 splitEsc :: (Char -> Bool) -> String -> (String, String)
 splitEsc _ [] = ([], [])

@@ -1,0 +1,23 @@
+FIX:
+- Tuple-handling in the evaluation module loops
+- That issue seems to be in Parse.insert as it seems to just pack everything into one operand if the operator is between things.
+
+TODO:
+- Base operations
+- Implement (hack) return
+- Type equality allowing for Tany to match any type
+- Order the operation ranks.
+
+FUTURE:
+Front part:
+- Fix "," to make it follow spec.
+- Tree-sitter or language server protocol integration.
+- translating markdown (and colors) to ansi in strings would be banger.
+- Include a wrapper for other interactive shells.
+- Scratch paper.
+Lang part:
+- rust style enum and match, which implies switch case.
+- struct and typeclass/trait.
+- More string types. E.G. lit string, regex string, whatever.
+- slices, anonymous functions, libraries.
+- Compiled version.

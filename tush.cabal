@@ -20,9 +20,14 @@ executable tush
     import:           warnings
     main-is:          Main.hs
     other-modules:    Misc,
-                      Token,
+                      Interpret.Token,
+                      Interpret.Parse,
+                      Interpret.Evaluate,
+                      Interpret.Data,
     -- other-extensions:
     build-depends:    base ^>=4.21.0.0,
-                      brick
+                      brick,
+                      containers,
+                      directory,
     hs-source-dirs:   .
     default-language: GHC2024

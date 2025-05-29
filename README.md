@@ -6,12 +6,6 @@
   `--'   `----' `----' `--' `--'
 ```
 
-- rust style enum and match, which implies switch case.
-- I don't think I'll go as far as struct and impl but eh we'll see.
-- seperate, static string typing for inside job strings [char] -> Command fString String Flag Argument Path.
-- slices, anonymous functions, libraries. (Though I think I'd rather call external processes).
-- Compilation for the scripting language.
-- Tree-sitter or language server protocol integration.
 # !!! Literally Unusable Right Now. Actually Still in Its Conception Stage !!!
 # Turtle Shell (tush)
 
@@ -20,7 +14,7 @@ Shipped alongside the Erminal, (hopefully).
 ___
 
 ## Dependencies
-- brick
+- [brick] (https://github.com/jtdaugherty/brick/tree/master?tab=readme-ov-file) Might change to vty. We'll see.
 
 ## Abnormalities:
 
@@ -66,7 +60,7 @@ ___
 28. Foreground/Background Processes.
 ___
 
-## What can be configured? (tush.ini)
+## What can be configured? (tush.ini or md? We'll see.)
 
 1. Styles.
     1. Indicator. (Default = "<[path]> ")
@@ -92,7 +86,7 @@ ___
 
 ## Turtle Shell Scripting Language 1.0 Specifications.
 
-Five token types: Literals, Variables, Operators, Closures, Pipers.
+Four token types: Literals, Variables, Operators, Closures.
 
 #### Literals
 
@@ -104,7 +98,7 @@ Five token types: Literals, Variables, Operators, Closures, Pipers.
     One-long tuples are automatically unpacked.\
     `(([a b c] d 'e') (a "bc") ('d' 5))`
     `(1, 2 + 3) == ((1) (2 + 3)) == (1, 5) == (1 5)`
-* arr - The array type, a collection of values from a single type. `[a1 a2 a3] [a4 a5] [b1 b2] ...`
+* arr - The array type, a collection of values from a single type. (They're actually lists in this implementation.) `[a1 a2 a3] [a4 a5] [b1 b2] ...`
 * typ - The type type, an enumeration of all types. `int flt bln ...`
 * fmt - Formatted Strings, stores the variable name and updates alongside the variables. `f"1 + 1 = {1+1}"`
 * str - Normal Strings, defined either with or without quotes. `This sentence has "four strings"`
@@ -170,7 +164,7 @@ Base Operators:
     * \+ -- Concatenates the two of the same kind of structure, with the exception of tuples where all entries are appended as-is. `((a b) + (c d) -> (a b (c d)))`
     * \- -- Drops a specified number of elements from the back of the structure. `(a b c) - 2 -> (a) -> a`
     * \* -- Duplicates the structure by a specified number of times. `[a1 a2 a3] * 3 -> [a1 a2 a3 a1 a2 a3 a1 a2 a3]`
-    * / -- Divides the structure into a specified number of parts equally. Rounded up. `"Hello World"/4 -> ["Hel" "lo " "Wor" "ld"]`
+    * / -- Divides the structure into a specified number of parts equally. Rounded to the nearest number. `"Hello World"/4 -> ["Hel" "lo " "Wor" "ld"]`
     * len -- Returns the length of the structure. `len [1..10] -> 10`
     * . -- accesses the structure. Can be done with either a number or an array. `let arr = [[1 2 3] [4 5 6] [7 8 9]], echo arr.2.[1 2] #8 9`
     * [a..b] -- creates a range of numbers or "enumerable" types, incremented by its version of 1.
@@ -188,14 +182,14 @@ Base Operators:
     * break -- Immediately terminates the loop being executed.
     * continue -- Immediately starts the next iteration of the loop being executed.
 * Definition
-    * let -- Defines a variable. If the type is obvious, the interpreter could infer it. Otherwise, denote the type. `let [type] x = [], let type y, let z = thing`
-    * fn -- Defines a function, composed on these tokens in any order: `fn [precendence] **tokens** {...}`
+    * let -- Defines a variable. If the type is obvious, the interpreter could infer it. Otherwise, denote the type. `let [Type] x = [], let Type y, let z = thing`
+    * opr -- Defines a function, composed on these tokens in any order: `opr [precendence] **tokens** = (...)`
         1. function\_name (may only be used once.)
         2. type varname
         3. (type1 var1 type2 var2)
       ```
-      fn 1 int a add int b { a + b }
-      fn mpy (int a int b) {
+      opr 1 int a add int b = { a + b }
+      opr mpy (int a int b) = {
           let acc = 0
           for i in [0..a] {
               acc = acc + b
@@ -208,21 +202,29 @@ Base Operators:
       Operators can also be shadowed, though an earlier definition will be matched if the input/output types don't match.\
       It follows roughly the same rules as shadowing.\
       ```
-      fn add int a int b { return str(a + b) }
-      fn add int a int b { return a + b }
-      fn add int a int b int c { return a + b + c }
+      opr add int a int b = { return str(a + b) }
+      opr add int a int b = { return a + b }
+      opr add int a int b int c = { return a + b + c }
       add 1 2
       add 1 2 3
       echo "Hello, " + (add 1 2)
       ```
       Note that there is a special variadic type (...) that consumes all input into a tuple.
       ```
-      fn addall (...) nums ( let acc = 0, for num in nums (if typ num == int || typ num == flt (acc = acc + num)), return acc)
+      opr addall (...) nums = ( let acc = 0, for num in nums (if typ num == int || typ num == flt (acc = acc + num)), return acc)
       addall 1 2 3 4 5 #15
       ```
       It is quite error-prone. So use it carefully.
-    * unset -- Unsets a variable and frees it from memory. Only works on variables of the same scope.\
-      **Probably will not Implement Since Shadowing Exists, and Same Scope Shadowing Automatically Unsets the Previous Definition**
+* Pipers
+    * , -- Ends an expression, used in place of newline in case the user can't or doesn't want to use a newline. `echo "Hello", echo "World"`
+    * | -- Pipes output as input for the next expression. `echo Hello World | cat`
+    * <- -- Here strings, replaces the stdin of the expression to the left with the string to the right. `cat <- "Hello World"`
+    * -> -- Write to file, replaces the contents of the target file on the right side with the left side. `echo Hello World -> hello.txt`
+    * => -- Append to file, adds the left side to the end of the file named the right side of the piper. `echo "\nAnother Line" => hello.txt, cat hello.txt`
+    * & -- Sends a job to the background, not waiting for it to be over before accepting the next input. `echo theBeeMovieScript.txt & vim`
+
+    Pipers are basically whatever ; > >> <<< were in bash. I don't know their names.
+    They should behave the same in which expressions that contain errors are skipped while the rest of the program is executed normally.
 
 #### Closures
 
@@ -239,19 +241,7 @@ With locality rules, x and y are deallocated after the tuple is done evaluating.
 When they are used in control-flow statements or function definitions,
 it would just be saved as `{let x = 1, let y = 2, return x + y}` and not evaluated until needed.
 
-#### Pipers
-
-1. , -- Ends an expression, used in place of newline in case the user can't or doesn't want to use a newline. `echo "Hello", echo "World"`
-2. | -- Pipes output as input for the next expression. `echo Hello World | cat`
-3. <- -- Here strings, replaces the stdin of the expression to the left with the string to the right. `cat <- "Hello World"`
-4. -> -- Write to file, replaces the contents of the target file on the right side with the left side. `echo Hello World -> hello.txt`
-5. => -- Append to file, adds the left side to the end of the file named the right side of the piper. `echo "\nAnother Line" => hello.txt, cat hello.txt`
-6. & -- Sends a job to the background, not waiting for it to be over before accepting the next input. `echo theBeeMovieScript.txt & vim`
-
-Pipers are basically whatever ; > >> <<< were in bash. I don't know their names.
-They should behave the same in which expressions that contain errors are skipped while the rest of the program is executed normally.
-
-#### Operator precedence. High to low.
+#### Operator precedence. High to low. (TODO)
 
 255. Closure
 10. IO
@@ -277,23 +267,6 @@ len x is () len (x)
 With the lack of error handling (until structs and enums are added), error messages are simply printed and the expression is aborted.\
 Changes made are not reverted.\
 Currently, all values are passed as copies in operations. This may lead to more memory usage,\
-but I already said it would be slow and heavy, so I'm not bothering to change it.
+but I already said it would be slow and heavy, so I'm not bothering to change it.\
 closures should capture the stdout (and stderr) of the commands executed into strings.
 ___
-
-### Future planned features.
-
-#### Shell part.
-
-- translating markdown (and colors) to ansi in formatted strings would be banger.
-- Include a wrapper for other interactive shells.
-- Scratch paper.
-
-#### Language part.
-
-- rust style enum and match, which implies switch case.
-- I don't think I'll go as far as struct and impl but eh we'll see.
-- seperate, static string typing for inside job strings [char] -> Command fString String Flag Argument Path.
-- slices, anonymous functions, libraries. (Though I think I'd rather call external processes).
-- Compilation for the scripting language.
-- Tree-sitter or language server protocol integration.
