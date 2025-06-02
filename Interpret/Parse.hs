@@ -44,9 +44,9 @@ insert expr@(Expression rank top left right) x =
       else Expression r    o   expr   (Operand $ Tup [])
     _       ->
       Expression rank top left $ insert right x
--- Shouldn't happen, but let's put it here.
-insert (Operand opr) x =
+insert left@(Operand opr) x =
   case x of
+    Opr r o -> Expression r o left (Operand $ Tup [])
     Tup tup ->
       case opr of
         Tup t2 -> Operand $ Tup $ t2 ++ tup
@@ -61,27 +61,3 @@ insert (Operand opr) x =
 treeify :: Expression -> [Token] -> Expression
 treeify acc []     = acc
 treeify acc (x:xs) = treeify (insert acc x) xs
-
--- Transforms token trees into OpTree.
--- Vars have their types known
--- (if Haskell is lazy enough. It can be fixed later without affecting this module, though.)
--- so you can just fetch the type from the struct. 
--- The only fallible part since the others are just arranging things.
--- Removes rank metadata.
--- sen2exp :: Memory -> Sentence -> Either String Expression
--- -- This branch is not the base case. It exists to patch the front and the back.
--- sen2exp _ End = Right $ Operand None
-
--- sen2exp mem (Node x l r)
---   |
---   l == End && r == End = do
---     val <- tok2val mem x
---     Right $ Operand val
---   |
---   l == End = undefined
---   |
---   r == End = undefined
---   |
---   otherwise =
---     undefined
-

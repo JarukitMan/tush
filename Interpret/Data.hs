@@ -19,8 +19,10 @@ newscope mem = M.empty:mem
 -- This is done so that one single namespace is used
 -- for both variables and operators while allowing overloading. 
 -- Op is rank, map from types to body
-data Data = Op Word8 (M.Map ([Type], [Type]) Operator) | Val Value
+-- The opmap is converted to (Map left -> (Map right -> op, op if right doesn't match (any)), (Map right -> op, op if both don't match (any)) if left doesn't match (any))
+data Data = Op Word8 OpMap | Val Value
   deriving (Show)
+type OpMap = (M.Map [Type] (M.Map [Type] Operator, Maybe Operator), Maybe (M.Map [Type] Operator, Maybe Operator))
 
 data Token =
   Var String | Opr Word8 String | Str String | Pth String | Int Integer | Chr Char | Bln Bool | Typ Type |
@@ -57,13 +59,47 @@ instance Show Token where
 -- Strict form of token.
 data Value =
   Int' Integer | Flt' Double | Chr' Char | Str' String | Bln' Bool | Pth' String | Typ' Type |
-  Arr' Type [Value] | Tup' [Value]| Fmt' [Either String Expression] | None 
-  deriving (Show, Ord, Eq)
+  Arr' Type [Value] | Tup' [Value]
+  deriving (Ord, Eq)
 
+instance Show Value where
+  show :: Value -> String
+  show val =
+    case val of
+      Int' int -> show int
+      Flt' flt -> show flt
+      Chr' chr -> show chr
+      Str' str -> str
+      Bln' bln -> show bln
+      Pth' pth -> pth
+      Typ' typ -> show typ
+      Arr' _ x -> '[':(intercalate " " $ map show x)   ++ "]"
+      Tup' tup -> '(':(intercalate " " $ map show tup) ++ ")"
+
+cmd :: Value -> [String]
+cmd = undefined
+
+-- Added a "break" type for sending the break signal to the for/while loop controller.
 data Type =
   Tint | Tflt | Tchr | Tstr | Ttyp | Tbln | Tpth |
-  Tarr Type | Ttup [Type] | Tnon | Tany | Tfmt
-  deriving (Show, Ord, Eq)
+  Tarr Type | Ttup [Type] | Tnon | Tany | Break
+  deriving (Show, Ord)
+
+instance Eq Type where
+  (==) :: Type -> Type -> Bool
+  Tany == _ = True
+  _ == Tany = True
+  Tint == Tint = True
+  Tflt == Tflt = True
+  Tchr == Tchr = True
+  Tstr == Tstr = True
+  Ttyp == Ttyp = True
+  Tbln == Tbln = True
+  Tpth == Tpth = True
+  Tnon == Tnon = True
+  Tarr a == Tarr b = a == b
+  Ttup a == Ttup b = a == b
+  _ == _ = False
 
 -- Base operators should just be handled by the evaluation module.
 -- They can check the name.
@@ -84,6 +120,41 @@ instance Show Operator where
     case op of
       Base _ t    -> "base with output type "    ++ show t
       Defined s _ t -> "defined at " ++ show s ++ "with output type " ++ show t
+
+insertOp :: ([Type], [Type]) -> Operator -> OpMap -> OpMap
+insertOp (left, right) op (lmap, lany) =
+  if left == [Tany]
+  then
+    case lany of
+      Just (rmap, rany) -> insertRight rmap rany
+      Nothing ->
+        if right == [Tany]
+        then (lmap, Just (M.empty, Just op))
+        else (lmap, Just (M.singleton right op, Nothing))
+  else
+    case left `M.lookup` lmap of
+      Just (rmap, rany) -> insertRight rmap rany
+      Nothing    -> (M.insert left (M.singleton right op, Nothing) lmap, lany)
+  where
+    insertRight rmap rany =
+      if right == [Tany]
+      then (lmap, Just (M.empty, Just op))
+      else (lmap, Just (M.insert right op rmap, rany))
+
+lookupOp :: ([Type], [Type]) -> OpMap -> Maybe Operator
+lookupOp (left, right) (lmap, lany) =
+  let
+    lookupR (rmap, rany) =
+      case right `M.lookup` rmap of
+        Just op -> Just op
+        Nothing -> rany
+  in
+    case left `M.lookup` lmap of
+      Nothing ->
+        case lany of
+          Nothing -> Nothing
+          Just rside -> lookupR rside
+      Just rside -> lookupR rside
 
 -- Error-checking should be done by the interpreter. This tree allows for variables.
 data Expression = Expression Word8 String Expression Expression | Operand Token
@@ -106,10 +177,8 @@ val2typ val =
     Bln' _     -> Tbln
     Pth' _     -> Tpth
     Typ' _     -> Ttyp
-    Fmt' _     -> Tfmt
     Arr' typ _ -> Tarr typ
     Tup' tup   -> Ttup (map val2typ tup)
-    None       -> Tnon
 
 tok2typ :: Memory -> Token -> Type
 tok2typ mem t =
@@ -121,7 +190,7 @@ tok2typ mem t =
     Chr _   -> Tchr
     Bln _   -> Tbln
     Typ _   -> Ttyp
-    Fmt _   -> Tfmt
+    Fmt _   -> Tstr
     Tup tup -> Ttup $ map (tok2typ mem) tup
     Arr arr -> Tarr $
       case headMaybe arr of
@@ -134,22 +203,6 @@ tok2typ mem t =
           case dat of
             Op _ _  -> Tany
             Val val -> val2typ val
-
--- This is "light interpretation" for type-checking functions.
--- Also used for operator input matching.
-exp2typs :: Memory -> Expression -> Maybe [Type]
-exp2typs mem (Operand x) = Just $ tCollapse [tok2typ mem x]
-exp2typs mem (Expression _ op left right) = do
-  dat <- getMem mem op
-  case dat of
-    Val _ -> Nothing
-    Op _ opmap -> do
-      lefts <- exp2typs mem left
-      rights <- exp2typs mem right
-      opr <- M.lookup (lefts, rights) opmap
-      case opr of
-        Base _ t -> Just $ tCollapse [t]
-        Defined _ _ t -> Just $ tCollapse [t]
 
 -- (a) -> a repeatedly.
 collapse :: Token -> Token
@@ -167,21 +220,3 @@ getRank x =
   case x of
     Opr r _ -> r
     _       -> 255
-
--- tok2val :: Memory -> Token -> Either String Value
--- tok2val mem x =
---   case x of
---     Int num -> Right $ Int' num
---     Chr chr -> Right $ Chr' chr
---     Bln bln -> Right $ Bln' bln
---     Str str -> Right $ Str' str
---     Pth pth -> Right $ Pth' pth
---     Typ typ -> Right $ Typ' typ
---     Tup _   -> undefined
---     Arr _   -> undefined
---     Fmt _   -> undefined
---     Var v   ->
---       case getMem mem v of
---         Just (Val lit) -> Right $ lit
---         _   -> Left  $ "Identifier not found in scope: " ++ v
---     Opr _ _ -> Left "Parse Error: An operation appeared at the bottom level."

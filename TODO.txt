@@ -1,23 +1,28 @@
 FIX:
-- Tuple-handling in the evaluation module loops
-- That issue seems to be in Parse.insert as it seems to just pack everything into one operand if the operator is between things.
 
 TODO:
-- Base operations
-- Implement (hack) return
-- Type equality allowing for Tany to match any type
 - Order the operation ranks.
+- Implement (hack) return, continue, and break.
+  - Make the type-checker check for returns
+  - Make output type part of the interpret function input,
+    so that it can immediately exit when the type matches.
+    The top level would be Tany.
+    `break` and `return` could be return () and
+      ^           ^ do nothing.
+      signal the loop to end somehow.
+- Base operations
+- Map operations to names
 
 FUTURE:
 Front part:
-- Fix "," to make it follow spec.
 - Tree-sitter or language server protocol integration.
-- translating markdown (and colors) to ansi in strings would be banger.
+- Translate markdown (and colors) to ansi in strings.
 - Include a wrapper for other interactive shells.
 - Scratch paper.
 Lang part:
-- rust style enum and match, which implies switch case.
-- struct and typeclass/trait.
+- Make "," follow spec.
+- Rust style enum and match, which implies switch case.
+- Struct and typeclass/trait.
 - More string types. E.G. lit string, regex string, whatever.
-- slices, anonymous functions, libraries.
+- Slices, anonymous functions, libraries.
 - Compiled version.

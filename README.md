@@ -100,9 +100,9 @@ Four token types: Literals, Variables, Operators, Closures.
     `(1, 2 + 3) == ((1) (2 + 3)) == (1, 5) == (1 5)`
 * arr - The array type, a collection of values from a single type. (They're actually lists in this implementation.) `[a1 a2 a3] [a4 a5] [b1 b2] ...`
 * typ - The type type, an enumeration of all types. `int flt bln ...`
-* fmt - Formatted Strings, stores the variable name and updates alongside the variables. `f"1 + 1 = {1+1}"`
 * str - Normal Strings, defined either with or without quotes. `This sentence has "four strings"`
 * pth - The file path type, can be enumerated if the files are from the same directory. `~/CloseToHome Relative/Folder /root`
+* Note: there are formatted strings defined by `f"..."` that are evaluated to string immediately.
 
 #### Variables
 

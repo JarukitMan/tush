@@ -152,7 +152,7 @@ pmtMaybe x =
     "Int" -> Just Tint
     "Chr" -> Just Tchr
     "Str" -> Just Tstr
-    "Fmt" -> Just Tfmt
+    "Fmt" -> Just Tstr
     "Flt" -> Just Tflt
     "Bln" -> Just Tbln
     "Typ" -> Just Ttyp

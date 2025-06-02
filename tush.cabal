@@ -24,10 +24,12 @@ executable tush
                       Interpret.Parse,
                       Interpret.Evaluate,
                       Interpret.Data,
+                      Interpret.Operators,
     -- other-extensions:
     build-depends:    base ^>=4.21.0.0,
                       brick,
                       containers,
                       directory,
+                      process,
     hs-source-dirs:   .
     default-language: GHC2024

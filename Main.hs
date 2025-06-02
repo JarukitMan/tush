@@ -21,33 +21,44 @@ main = do
       -- putStrLn $ unlines (map (\x -> case tokenize x of Left err -> err ; Right tokens -> show tokens) (lines content))
       case tokenize initmem content of
         Right tokens -> do
+          -- DEBUG
           putStrLn $ "\ESC[1;32m[TOKENS]\ESC[0m\n" ++ (show tokens)
           putStrLn $ "\ESC[1;32m[PARTS]\ESC[0m\n"  ++ (show $ bunch tokens)
           putStrLn $ "\ESC[1;32m[SENTENCE]\ESC[0m\n"  ++ ((show . parse) tokens)
+          _ <- ((interpret Tany initmem) . parse) tokens
+          return ()
         Left  errmsg -> putStrLn $ "\ESC[1;31m[ERROR]\ESC[0m\n" ++ errmsg
-    Nothing -> mainLoop
+    Nothing -> do
+      _ <- mainLoop initmem
+      return ()
 
 -- The main loop acts like a for loop here.
-mainLoop :: IO ()
-mainLoop = do
+mainLoop :: Memory -> IO Memory
+mainLoop mem = do
   cwd  <- getCurrentDirectory
   prompt <- tempprompt
   putStr prompt
   hFlush stdout
   line <- getLine
-  if not $ Prelude.null line then do
+  if not $ "exit" == line then do
     putStrLn $ "\ESC[1;33m[DIR]\ESC[0m\n" ++ cwd
     case tokenize initmem line of
       Right tokens -> do
+        -- DEBUG
         putStrLn $ "\ESC[1;32m[TOKENS]\ESC[0m\n" ++ (show tokens)
         putStrLn $ "\ESC[1;32m[PARTS]\ESC[0m\n"  ++ (show $ bunch tokens)
         putStrLn $ "\ESC[1;32m[SENTENCE]\ESC[0m\n"  ++ ((show . parse) tokens)
-        _ <- ((interpret initmem) . treeify (Operand $ Tup []) . bunch) tokens
-        return ()
-      Left  errmsg -> putStrLn $ "\ESC[1;31m[ERROR]\ESC[0m\n" ++ errmsg
-    mainLoop
+        result <- ((interpret Tany mem) . parse) tokens
+        case result of
+          Just (newmem, out) -> do
+            putStrLn $ show out
+            mainLoop newmem
+          Nothing -> mainLoop mem
+      Left  errmsg -> do
+        putStrLn $ "\ESC[1;31m[ERROR]\ESC[0m\n" ++ errmsg
+        mainLoop mem
   else
-    return ()
+    return mem
 
 -- The actual thing will fetch from the config file.
 -- This is a placeholder function that doesn't actually exist.
@@ -62,17 +73,13 @@ initmem :: Memory
 initmem =
   [
     fromList
-    [
-      (
-        ",", Op 0
-        (
-          fromList
-          [
-            (
-              ([Tany], [Tany]), Base (\m l r -> do {putStrLn $ show l ++ show r ; return $ Just (m, None)}) Tany
-            )
-          ]
-        )
-      )
-    ]
+      [
+        (",", Op 0 (empty, Nothing)),
+        (".", Op 2 (empty, Nothing)),
+        ("+", Op 3 (empty, Nothing)),
+        ("-", Op 3 (empty, Nothing)),
+        ("*", Op 4 (empty, Nothing)),
+        ("/", Op 4 (empty, Nothing)),
+        ("return", Op 1 (empty, Nothing))
+      ]
   ]
