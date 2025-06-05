@@ -99,3 +99,8 @@ matching x =
 
 matches :: Char -> Char -> Bool
 matches a b = (matching a) == b
+
+takeDiff :: Eq a => [a] -> [a] -> [a]
+takeDiff xs [] = xs
+takeDiff [] _  = []
+takeDiff (x:xs) (y:ys) = if x == y then takeDiff xs ys else x:xs

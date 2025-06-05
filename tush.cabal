@@ -28,6 +28,8 @@ executable tush
     -- other-extensions:
     build-depends:    base ^>=4.21.0.0,
                       brick,
+                      -- I don't know which one to use yet.
+                      vty-crossplatform,
                       containers,
                       directory,
                       process,

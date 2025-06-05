@@ -2,6 +2,7 @@ module Interpret.Evaluate where
 -- import Interpret.Token
 import Interpret.Data
 import Interpret.Parse
+import System.Directory
 import qualified Data.Map as M
 import Misc
 
@@ -25,12 +26,12 @@ interpret t mem (Expression _ opr left right) =
         Op _ opmap -> do
           case exp2typs mem left of
             Nothing -> do
-              putStrLn $ "Can't infer the type of operation `" ++ opr ++ "`'s left-hand side."
+              putStrLn $ "Can't infer the type of operation `" ++ opr ++ "`'s left-hand side at `" ++ show left ++ show opr ++ show right ++ "`."
               return Nothing
             Just lefts ->
               case exp2typs mem right of
                 Nothing -> do
-                  putStrLn $ "Can't infer the type of operation `" ++ opr ++ "`'s right-hand side."
+                  putStrLn $ "Can't infer the type of operation `" ++ opr ++ "`'s right-hand side at `" ++ show left ++ show opr ++ show right ++ "`."
                   return Nothing
                 Just rights ->
                   case (lefts, rights) `lookupOp` opmap of
@@ -39,12 +40,13 @@ interpret t mem (Expression _ opr left right) =
                         "Operator `" ++ opr ++ "` does not contain a variation that accepts type "
                         ++ show (exp2typs mem left) ++ " and " ++ show (exp2typs mem right)
                       return Nothing
-                    Just (Base opfun _) -> opfun mem left right
+                    Just (Base opfun _) -> opfun t mem left right
                     Just (Defined scopenum (names, optree) _) -> do
-                      Just (_, lefts') <- interpret t mem left
-                      Just (_, rights') <- interpret t mem left
+                      Just (mem', lefts') <- interpret t mem left
+                      Just (mem'', rights') <- interpret t mem' left
                       let
-                        (used, unused) = splitAt (fromIntegral scopenum) mem
+                        (used, unused) = splitAt (fromIntegral scopenum) mem''
+                        -- Input Values.
                         vals =
                           case lefts' of
                             Tup' tl ->
@@ -57,7 +59,8 @@ interpret t mem (Expression _ opr left right) =
                                 r       -> l:r:[]
                         newmem = M.fromList (zip names (map Val vals)):used
                       Just (frontmem, result) <- interpret t newmem optree
-                      return $ Just (frontmem ++ unused, result)
+                      -- Simple memory dropping. Might not work as intended.
+                      return $ Just (drop 1 frontmem ++ unused, result)
 interpret _ mem (Operand x) =
   case x of
     Var var ->
@@ -78,7 +81,14 @@ interpret _ mem (Operand x) =
     Chr chr -> return $ Just (mem, Chr' chr)
     Str str -> return $ Just (mem, Str' str)
     Bln bln -> return $ Just (mem, Bln' bln)
-    Pth pth -> return $ Just (mem, Pth' pth)
+    Pth pth ->
+      case pth of
+        ('~':rest) -> do
+          home <- getHomeDirectory
+          return $ Just (mem, Pth' $ home ++ rest)
+        _ -> do
+          canon <- canonicalizePath pth
+          return $ Just (mem, Pth' canon)
     Typ typ -> return $ Just (mem, Typ' typ)
     Tup [ ] -> return $ Just (mem, Tup' [ ])
     -- Type-checking done here.
@@ -86,7 +96,7 @@ interpret _ mem (Operand x) =
       ar <- handletup arr
       case ar of
         Nothing -> do
-          putStrLn $ "Array `" ++ show arr ++ "` cannot be evaluated."
+          putStrLn $ "Array `" ++ show x ++ "` cannot be evaluated."
           return Nothing
         Just (mem', arr') -> do
           let arrtypes = map val2typ arr' 
@@ -96,85 +106,23 @@ interpret _ mem (Operand x) =
               Just typ -> return $ Just (mem', Arr' typ  arr')
               Nothing  -> return $ Just (mem', Arr' Tany arr') 
           else do
-            putStrLn $ "Array `" ++ show arr ++ "`'s member types do not match."
+            putStrLn $ "Array `" ++ show x ++ "`'s member types do not match."
             return Nothing
     Tup tup   -> do
       tp <- handletup tup
       case tp of
         Nothing   -> do
-          putStrLn $ "Tuple `" ++ show tup ++ "` cannot be evaluated."
+          putStrLn $ "Tuple `" ++ show x ++ "` cannot be evaluated."
           return Nothing
         Just (mem', tup') -> return $ Just (mem', Tup' tup')
     Fmt fmt   -> do
       fm <- handletup $ map (\a -> case a of {Left txt -> Tup [Str txt]; Right xpr -> xpr}) fmt
       case fm of
         Nothing   -> do
-          putStrLn $ "Formatted String `" ++ show fmt ++ "` cannot be evaluated."
+          putStrLn $ "Formatted String `" ++ show x ++ "` cannot be evaluated."
           return Nothing
         Just (mem', fmt') -> return $ Just (mem', Str' $ concat $ map show fmt')
-      -- return $ Just
-      -- (
-      --   mem, Fmt' $ map
-      --   (
-      --     \part ->
-      --     case part of
-      --       Left str  -> Left str
-      --       Right tok -> Right $ parse [tok]
-      --   )
-      --   fmt
-      -- ) -- Right (mem, Fmt' fmt)
     where
-      -- handletup :: [Token] -> IO (Maybe [Value])
-      -- handletup xs =
-      --   let
-      --     hasOp (Opr _ _:_) = True
-      --     hasOp (_:xs') = hasOp xs'
-      --     hasOp [] = False
-      --   in
-      --     if hasOp xs
-      --     then do
-      --       -- DEBUG
-      --       putStrLn $ "handling " ++ show xs
-      --       -- tup <- ((interpret t $ newscope mem) . parse) xs
-      --       tup <-
-      --         case exp2typs mem (parse xs) of
-      --           Nothing -> return Nothing
-      --           Just typs -> do
-      --             -- DEBUG
-      --             putStrLn $ "Output type is: " ++ show typs
-      --             ((interpret (Ttup typs) $ newscope mem) . parse) xs
-      --       case tup of
-      --         Nothing -> return Nothing
-      --         Just (_, Tup' tup') -> return $ Just tup'
-      --         Just (_, val)       -> return $ Just [val]
-      --     else do
-      --       thing <-
-      --         (
-      --           sequence $ map
-      --           (
-      --             \typ ->
-      --             case typ of
-      --               Opr _ _ -> return Nothing
-      --               Var var -> return $
-      --                 case getMem mem var of
-      --                   Nothing -> Nothing
-      --                   Just (Op _ _) -> Nothing
-      --                   Just (Val val) -> Just val
-      --               Tup tup -> do
-      --                 Just (_, result) <- case exp2typs mem (parse tup) of
-      --                   Nothing -> return Nothing
-      --                   Just typs -> ((interpret (Ttup typs) $ newscope mem) . parse) tup
-      --                 return $ Just result
-      --               tok -> do
-      --                 -- Just (_, result) <- ((interpret t $ newscope mem) . parse) [tok]
-      --                 Just (_, result) <- case exp2typs mem (parse [tok]) of
-      --                   Nothing -> return Nothing
-      --                   Just typs -> ((interpret (Ttup typs) $ newscope mem) . parse) [tok]
-      --                 return $ Just result
-      --           )
-      --           xs
-      --         )
-      --       return $ sequence thing
       handletup :: [Token] -> IO (Maybe (Memory, [Value]))
       handletup xs =
         let
@@ -198,44 +146,50 @@ interpret _ mem (Operand x) =
               Nothing -> return Nothing
               Just (_, Tup' tup') -> return $ Just (mem, tup')
               Just (_, val)       -> return $ Just (mem, [val])
-          else
+          else do
             -- This looks like a mess!
-            foldl'
-            (
-              \acc t -> do
-              acc' <- acc
-              case acc' of
-                Nothing -> return Nothing
-                Just (m, ys) ->
-                  case t of
-                    Opr _ _ -> return Nothing
-                    Var var ->
-                      case getMem m var of
-                        Nothing -> return Nothing
-                        Just (Op _ _) -> return Nothing
-                        Just (Val val) -> return $ Just (m, val:ys)
-                    Tup tup -> do
-                      out <-
-                        case exp2typs m (parse tup) of
-                          Nothing -> return Nothing
-                          Just typs -> ((interpret (Ttup typs) $ newscope m) . parse) tup
-                      case out of
-                        Nothing -> return Nothing
-                        Just (m', result) ->
-                          return $ Just (m', result:ys)
-                    tok -> do
-                      -- Just (_, result) <- ((interpret t $ newscope mem) . parse) [tok]
-                      out <-
-                        case exp2typs m (parse [tok]) of
-                          Nothing -> return Nothing
-                          Just typs -> ((interpret (Ttup typs) $ newscope m) . parse) [tok]
-                      case out of
-                        Nothing -> return Nothing
-                        Just (m', result) ->
-                          return $ Just (m', result:ys)
-            )
-            (return $ Just (mem, []))
-            xs
+            let
+              resultReversed =
+                foldl'
+                (
+                  \acc t -> do
+                  acc' <- acc
+                  case acc' of
+                    Nothing -> return Nothing
+                    Just (m, ys) ->
+                      case t of
+                        Opr _ _ -> return Nothing
+                        Var var ->
+                          case getMem m var of
+                            Nothing -> return Nothing
+                            Just (Op _ _) -> return Nothing
+                            Just (Val val) -> return $ Just (m, val:ys)
+                        Tup tup -> do
+                          out <-
+                            case exp2typs m (parse tup) of
+                              Nothing -> return Nothing
+                              Just typs -> ((interpret (Ttup typs) $ newscope m) . parse) tup
+                          case out of
+                            Nothing -> return Nothing
+                            Just (m', result) ->
+                              return $ Just (m', result:ys)
+                        tok -> do
+                          -- Just (_, result) <- ((interpret t $ newscope mem) . parse) [tok]
+                          out <-
+                            case exp2typs m (parse [tok]) of
+                              Nothing -> return Nothing
+                              Just typs -> ((interpret (Ttup typs) $ newscope m) . parse) [tok]
+                          case out of
+                            Nothing -> return Nothing
+                            Just (m', result) ->
+                              return $ Just (m', result:ys)
+                )
+                (return $ Just (mem, []))
+                xs
+            resultRev <- resultReversed
+            case resultRev of
+              Nothing -> return Nothing
+              Just (mem', resultR) -> return $ Just (mem', reverse resultR)
                 
             -- return $ sequence thing
             
@@ -254,9 +208,17 @@ interpret _ mem (Operand x) =
 -- Which shouldn't happen. But in the case that it does happen, this would screw up.
 exp2typs :: Memory -> Expression -> Maybe [Type]
 exp2typs mem (Operand x) =
-  case x of
+  case collapse x of
     Tup [ ] -> Just []
-    Tup tup -> exp2typs mem (parse tup)
+    -- Tup [a] -> Just [tok2typ mem a]
+    Tup tup ->
+      if hasOps tup
+      then exp2typs mem (parse tup)
+      else Just $ map (tok2typ mem) tup
+        where
+          hasOps [] = False
+          hasOps ((Opr _ _):_) = True
+          hasOps (_:xs) = hasOps xs
     -- Might want to do better...
     Arr arr ->
       case exp2typs mem (parse arr) of

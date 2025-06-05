@@ -76,9 +76,6 @@ instance Show Value where
       Arr' _ x -> '[':(intercalate " " $ map show x)   ++ "]"
       Tup' tup -> '(':(intercalate " " $ map show tup) ++ ")"
 
-cmd :: Value -> [String]
-cmd = undefined
-
 -- Added a "break" type for sending the break signal to the for/while loop controller.
 data Type =
   Tint | Tflt | Tchr | Tstr | Ttyp | Tbln | Tpth |
@@ -111,7 +108,7 @@ instance Eq Type where
 -- Shows output type.
 -- Defined stores a scope so that it could only access the memory it has
 data Operator =
-  Base (Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))) Type |
+  Base (Type -> Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))) Type |
   Defined Word8 ([String], Expression) Type
 
 instance Show Operator where
@@ -220,3 +217,16 @@ getRank x =
   case x of
     Opr r _ -> r
     _       -> 255
+
+argify :: Value -> [String]
+argify val =
+  case val of
+    Int' int -> [show int]
+    Flt' flt -> [show flt]
+    Chr' chr -> [[chr]]
+    Str' str -> [str]
+    Bln' bln -> [show bln]
+    Pth' pth -> [pth]
+    Typ' typ -> [show typ]
+    Arr' _ arr -> concat $ map argify arr
+    Tup' tup -> concat $ map argify tup

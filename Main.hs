@@ -2,6 +2,7 @@ import qualified System.Environment as Env
 import Interpret.Token
 import Interpret.Data
 import Interpret.Evaluate
+import Interpret.Operators
 import Misc
 import Data.Map
 import Interpret.Parse
@@ -51,6 +52,11 @@ mainLoop mem = do
         result <- ((interpret Tany mem) . parse) tokens
         case result of
           Just (newmem, out) -> do
+            -- output <- cap out
+            -- case output of
+            --   Nothing -> putStrLn "Nothing!"
+            --   Just o -> putStr $ "\ESC[0m[CAPTURED]\n" ++ o ++ "\ESC[0m"
+            cmd out
             putStrLn $ show out
             mainLoop newmem
           Nothing -> mainLoop mem

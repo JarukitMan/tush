@@ -1,4 +1,5 @@
 FIX:
+- Capturing stdout while letting it print out naturally in `cap`.
 
 TODO:
 - Order the operation ranks.
@@ -26,3 +27,7 @@ Lang part:
 - More string types. E.G. lit string, regex string, whatever.
 - Slices, anonymous functions, libraries.
 - Compiled version.
+
+NOTES:
+Pipe is just eval left and pass it to system and feed out to right process.
+Redirect is just eval right, NOT passing it to system, then feed to left process.
