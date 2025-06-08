@@ -51,6 +51,11 @@ headMaybe :: [a] -> Maybe a
 headMaybe [] = Nothing
 headMaybe (x:_) = Just x
 
+lastMaybe :: [a] -> Maybe a
+lastMaybe [] = Nothing
+lastMaybe [a] = Just a
+lastMaybe (_:xs) = lastMaybe xs
+
 -- lines but \n and ,
 liners :: String -> [String]
 liners [] = []

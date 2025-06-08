@@ -1,18 +1,22 @@
 FIX:
+- handletup can't evaluate nested tuples.
 - Capturing stdout while letting it print out naturally in `cap`.
+- Proper pipelining. Might have to pass handles around to also allow for background processes to be resumed.
+- ^ Currently, it outputs a string so when "," gets it, it thinks it's a command and passes it to the system.
+-   ^ The current temporay solution is to only pass operands to the system in "," and not expressions.
+- Implement a better way to check types. Currently can't check Tarr Tany or anything like that. This screws with BaseOp type-checking.
 
 TODO:
-- Order the operation ranks.
 - Implement (hack) return, continue, and break.
-  - Make the type-checker check for returns
-  - Make output type part of the interpret function input,
-    so that it can immediately exit when the type matches.
-    The top level would be Tany.
-    `break` and `return` could be return () and
-      ^           ^ do nothing.
-      signal the loop to end somehow.
+- `break` and `return` could be return () and
+    ^           ^ do nothing.
+    signal the loop to end somehow.
 - Base operations
+- Remaining: len, range, type-casts, function definition, control-flow, read, booleans, let, =, <-, ->, =>, &
+- Implement the global boolean state.
 - Map operations to names
+- Implement Grr.
+- Implement Imp.
 
 FUTURE:
 Front part:
@@ -27,6 +31,7 @@ Lang part:
 - More string types. E.G. lit string, regex string, whatever.
 - Slices, anonymous functions, libraries.
 - Compiled version.
+- Real generic support.
 
 NOTES:
 Pipe is just eval left and pass it to system and feed out to right process.

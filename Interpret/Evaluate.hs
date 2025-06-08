@@ -5,6 +5,8 @@ import Interpret.Parse
 import System.Directory
 import qualified Data.Map as M
 import Misc
+-- import System.Directory
+-- import System.IO
 
 -- Memory is a Map of Name -> Data
 --                         v seems like that to the outside
@@ -24,12 +26,12 @@ interpret t mem (Expression _ opr left right) =
           putStrLn "Evaluation Error: Literal found at non-bottom level."
           return Nothing
         Op _ opmap -> do
-          case exp2typs mem left of
+          case exp2typ mem left of
             Nothing -> do
               putStrLn $ "Can't infer the type of operation `" ++ opr ++ "`'s left-hand side at `" ++ show left ++ show opr ++ show right ++ "`."
               return Nothing
             Just lefts ->
-              case exp2typs mem right of
+              case exp2typ mem right of
                 Nothing -> do
                   putStrLn $ "Can't infer the type of operation `" ++ opr ++ "`'s right-hand side at `" ++ show left ++ show opr ++ show right ++ "`."
                   return Nothing
@@ -38,29 +40,27 @@ interpret t mem (Expression _ opr left right) =
                     Nothing -> do
                       putStrLn $
                         "Operator `" ++ opr ++ "` does not contain a variation that accepts type "
-                        ++ show (exp2typs mem left) ++ " and " ++ show (exp2typs mem right)
+                        ++ show (exp2typ mem left) ++ " and " ++ show (exp2typ mem right)
                       return Nothing
                     Just (Base opfun _) -> opfun t mem left right
                     Just (Defined scopenum (names, optree) _) -> do
                       Just (mem', lefts') <- interpret t mem left
-                      Just (mem'', rights') <- interpret t mem' left
+                      Just (mem'', rights') <- interpret t mem' right
                       let
                         (used, unused) = splitAt (fromIntegral scopenum) mem''
                         -- Input Values.
-                        vals =
-                          case lefts' of
-                            Tup' tl ->
-                              case rights' of
-                                Tup' tr -> tl ++ tr
-                                r       -> tl ++ [r]
-                            l ->
-                              case rights' of
-                                Tup' tr -> l:tr
-                                r       -> l:r:[]
-                        newmem = M.fromList (zip names (map Val vals)):used
-                      Just (frontmem, result) <- interpret t newmem optree
-                      -- Simple memory dropping. Might not work as intended.
-                      return $ Just (drop 1 frontmem ++ unused, result)
+                        vals = Tup' [vCollapse lefts', vCollapse rights']
+                        newmem = case zipVar names vals of
+                          Just ns -> Just $ (M.fromList ns):used
+                          Nothing -> Nothing
+                      case newmem of
+                        Just nm -> do
+                          out <- interpret t nm optree
+                          case out of
+                            Nothing -> return Nothing
+                            -- Simple memory dropping. Might not work as intended.
+                            Just (frontmem, result) -> return $ Just (drop 1 frontmem ++ unused, result)
+                        Nothing -> return Nothing
 interpret _ mem (Operand x) =
   case x of
     Var var ->
@@ -121,30 +121,32 @@ interpret _ mem (Operand x) =
         Nothing   -> do
           putStrLn $ "Formatted String `" ++ show x ++ "` cannot be evaluated."
           return Nothing
-        Just (mem', fmt') -> return $ Just (mem', Str' $ concat $ map show fmt')
+        -- Just (mem', fmt') -> return $ Just (mem', Str' $ concat $ map show fmt')
+        Just (mem', fmt') -> do
+          fmt'' <- argIO fmt'
+          return $ Just (mem', Str' $ concat $ fmt'')
     where
       handletup :: [Token] -> IO (Maybe (Memory, [Value]))
       handletup xs =
-        let
-          hasOp (Opr _ _:_) = True
-          hasOp (_:xs') = hasOp xs'
-          hasOp [] = False
-        in
           if hasOp xs
           then do
             -- DEBUG
             putStrLn $ "handling " ++ show xs
             -- tup <- ((interpret t $ newscope mem) . parse) xs
             tup <-
-              case exp2typs mem (parse xs) of
-                Nothing -> return Nothing
-                Just typs -> do
+              case exp2typ mem (parse xs) of
+                Nothing -> do
+                  putStrLn $ "exp2typs failed to parse " ++ show xs ++ ". (before interpreting.)"
+                  return Nothing
+                Just typ -> do
                   -- DEBUG
-                  putStrLn $ "Output type is: " ++ show typs
-                  ((interpret (Ttup typs) $ newscope mem) . parse) xs
+                  putStrLn $ "Output type is: " ++ show typ
+                  ((interpret typ $ newscope mem) . parse) xs
             case tup of
-              Nothing -> return Nothing
-              Just (_, Tup' tup') -> return $ Just (mem, tup')
+              Nothing -> do
+                putStrLn $ "exp2typs failed to parse " ++ show xs ++ "."
+                return Nothing
+              Just (_, Tup' tup') -> return $ Just (mem, (map vCollapse tup'))
               Just (_, val)       -> return $ Just (mem, [val])
           else do
             -- This looks like a mess!
@@ -158,27 +160,35 @@ interpret _ mem (Operand x) =
                     Nothing -> return Nothing
                     Just (m, ys) ->
                       case t of
-                        Opr _ _ -> return Nothing
+                        Opr _ opr -> do
+                          putStrLn $ "Found operator " ++ opr ++ " where it's not supposed to be (after hasOp returns False.)"
+                          return Nothing
                         Var var ->
                           case getMem m var of
-                            Nothing -> return Nothing
-                            Just (Op _ _) -> return Nothing
+                            Nothing -> do
+                              putStrLn $ "Found variable " ++ var ++ ", which does not exist."
+                              return Nothing
+                            Just (Op _ _) -> do
+                              putStrLn $ "Found operator " ++ var ++ " where it's not supposed to be (after hasOp returns False.)"
+                              return Nothing
                             Just (Val val) -> return $ Just (m, val:ys)
                         Tup tup -> do
                           out <-
-                            case exp2typs m (parse tup) of
-                              Nothing -> return Nothing
-                              Just typs -> ((interpret (Ttup typs) $ newscope m) . parse) tup
+                            case exp2typ m (parse tup) of
+                              Nothing -> do
+                                putStrLn $ "exp2typs failed to parse " ++ show xs ++ ". (Nested)"
+                                return Nothing
+                              Just typ -> ((interpret typ $ newscope m) . parse) tup
                           case out of
                             Nothing -> return Nothing
                             Just (m', result) ->
-                              return $ Just (m', result:ys)
+                              return $ Just (m', (vCollapse result):ys)
                         tok -> do
                           -- Just (_, result) <- ((interpret t $ newscope mem) . parse) [tok]
                           out <-
-                            case exp2typs m (parse [tok]) of
+                            case exp2typ m (parse [tok]) of
                               Nothing -> return Nothing
-                              Just typs -> ((interpret (Ttup typs) $ newscope m) . parse) [tok]
+                              Just typ -> ((interpret typ $ newscope m) . parse) [tok]
                           case out of
                             Nothing -> return Nothing
                             Just (m', result) ->
@@ -206,43 +216,44 @@ interpret _ mem (Operand x) =
 -- Also used for operator input matching.
 -- This assumes that you CAN'T have operations lingering around in operands.
 -- Which shouldn't happen. But in the case that it does happen, this would screw up.
-exp2typs :: Memory -> Expression -> Maybe [Type]
-exp2typs mem (Operand x) =
+-- There's something wrong inside that propagates a Nothing.
+exp2typ :: Memory -> Expression -> Maybe Type
+exp2typ mem (Operand x) =
   case collapse x of
-    Tup [ ] -> Just []
+    Tup [ ] -> Just $ Ttup []
     -- Tup [a] -> Just [tok2typ mem a]
     Tup tup ->
-      if hasOps tup
-      then exp2typs mem (parse tup)
-      else Just $ map (tok2typ mem) tup
-        where
-          hasOps [] = False
-          hasOps ((Opr _ _):_) = True
-          hasOps (_:xs) = hasOps xs
+      if hasOp tup
+      then exp2typ mem (parse tup)
+      else Just $ tCollapse $ Ttup $ map (tok2typ mem) tup
     -- Might want to do better...
     Arr arr ->
-      case exp2typs mem (parse arr) of
-        Nothing -> Nothing
-        Just typs ->
-          case headMaybe typs of
-            Nothing -> Nothing
-            Just thead -> Just [thead]
-    tok -> Just [tok2typ mem tok]
-exp2typs mem ex@(Expression _ op left right) =
+      if hasOp arr
+      then
+        case exp2typ mem (parse arr) of
+          Nothing           -> Nothing
+          Just (Ttup (h:_)) -> Just $ Tarr $ tCollapse h
+          Just h            -> Just $ Tarr $ tCollapse h
+      else
+        case headMaybe $ map (tok2typ mem) arr of
+          Nothing -> Nothing
+          Just h  -> Just $ Tarr $ tCollapse h
+    tok -> Just $ tCollapse (tok2typ mem tok)
+exp2typ mem ex@(Expression _ op left right) =
   case findName "return" ex of
-    Just (Expression _ _ _ r) -> exp2typs mem r
-    Just x@(Operand _) -> exp2typs mem x
+    Just (Expression _ _ _ r) -> exp2typ mem r
+    Just x@(Operand _) -> exp2typ mem x
     Nothing -> do
       dat <- getMem mem op
       case dat of
         Val _ -> Nothing
         Op _ opmap -> do
-          lefts <- exp2typs mem left
-          rights <- exp2typs mem right
-          opr <- (lefts, rights) `lookupOp` opmap
+          l <- exp2typ mem left
+          r <- exp2typ mem right
+          opr <- (tCollapse l, tCollapse r) `lookupOp` opmap
           case opr of
-            Base _ t -> Just $ tCollapse [t]
-            Defined _ _ t -> Just $ tCollapse [t]
+            Base _ t -> Just $ tCollapse t
+            Defined _ _ t -> Just $ tCollapse t
 
 findName :: String -> Expression -> Maybe Expression
 findName name ex@(Expression _ op left right) =
