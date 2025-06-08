@@ -12,7 +12,7 @@ TODO:
     ^           ^ do nothing.
     signal the loop to end somehow.
 - Base operations
-- Remaining: len, range, type-casts, function definition, control-flow, read, booleans, let, =, <-, ->, =>, &
+- Remaining: type-casts, function definition, control-flow, let, =, <-, ->, =>, &
 - Implement the global boolean state.
 - Map operations to names
 - Implement Grr.

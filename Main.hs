@@ -330,7 +330,7 @@ initmem =
             (empty, Nothing)
           )
         ),
-        ("read", Op 255
+        ("input", Op 255
           (
             (empty, Nothing)
           )

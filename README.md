@@ -123,7 +123,7 @@ four = fourthree #ERROR: Type Mismatch.
 However, it is possible to "shadow" variables, reusing the same name for two different variables.
 
 ```
-let x = int(read)
+let x = int(input)
 if x < 100 {
     let x = "Something else"
     echo x
@@ -139,7 +139,7 @@ Operations are split into two types, base and defined.
 
 Base Operators:
 * IO
-    * read -- reads a line of input from the stdin into a str.
+    * input -- reads a line of input from the stdin into a str.
 * Arithmatic
     * \+ -- adds two numbers together
     * \- -- subtracts the second number from the first

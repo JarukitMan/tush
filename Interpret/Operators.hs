@@ -14,6 +14,7 @@ import System.IO
 import System.Exit
 -- import System.Environment
 import Control.Exception
+import GHC.Float
 
 add :: Type -> Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))
 add typ mem lhs rhs = do
@@ -61,7 +62,7 @@ add typ mem lhs rhs = do
                 exists <- doesPathExist dir
                 if exists
                 then do
-                  files <- getDirectoryContents dir
+                  files <- listDirectory dir
                   let fcycle = cycle files
                   return $ Just (mr, Pth' $ (dropWhile (/= a) fcycle) !! (fromInteger b))
                 else do
@@ -351,7 +352,7 @@ cd _ mem lhs rhs = do
       Just t -> interpret t mem lhs
   case left of
     Nothing -> return Nothing
-    Just (ml, _) -> do
+    Just (ml, l) -> do
       right <-
         case exp2typ ml rhs of
           Nothing -> return Nothing
@@ -362,7 +363,7 @@ cd _ mem lhs rhs = do
           pwd <- getCurrentDirectory
           setCurrentDirectory home
           putStrLn $ "cd: " ++ pwd ++ " -> " ++ home
-          return $ Just (mem', Tup' [])
+          return $ Just (mem', l)
         Just (mem', r) -> do
           pth <- canonicalizePath $ show r
           pathExists <- doesPathExist pth
@@ -371,12 +372,14 @@ cd _ mem lhs rhs = do
             pwd <- getCurrentDirectory
             putStrLn $ "cd: " ++ pwd ++ " -> " ++ pth
             setCurrentDirectory $ show r
-          else putStrLn $ "cd: Directory " ++ pth ++ " doesn't exist."
-          return $ Just (mem', Tup' [])
+            return $ Just (mem', l)
+          else
+            (putStrLn $ "cd: Directory " ++ pth ++ " doesn't exist.") >>=
+            \_ -> return $ Nothing
         Nothing ->
           getHomeDirectory >>=
           setCurrentDirectory >>=
-          \_ -> return $ Just (mem, Tup' [])
+          \_ -> return $ Just (mem, l)
 
 -- setenv :: Type -> Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))
 -- setenv mem _ rhs = do
@@ -431,12 +434,16 @@ next typ mem lhs rhs = catch (do
     -- didn't mean screwing up the user experience.
     check a =
         case a of
-          Arr' Tstr (x:_)   -> execOr $ show x
           Str' x            -> execOr x
           Tup' ((Str' x):_) -> execOr x
-          -- Because there aren't necessarily in PATH
+          Arr' Tstr (x:_)   -> execOr $ show x
+          -- Str' _            -> cmd a >>= \_ -> return $ Tup' []
+          -- Tup' ((Str' _):_) -> cmd a >>= \_ -> return $ Tup' []
+          -- Arr' Tstr _       -> cmd a >>= \_ -> return $ Tup' []
+          -- Because they aren't necessarily in PATH
           Pth' _            -> cmd a >>= \_ -> return $ Tup' []
           Tup' ((Pth' _):_) -> cmd a >>= \_ -> return $ Tup' []
+          Arr' Tpth _       -> cmd a >>= \_ -> return $ Tup' []
           _ -> return a
           where
             execOr x = do
@@ -479,7 +486,9 @@ pipe _ mem lhs rhs = (do
                 case x' of
                   Nothing -> return $ Just $ show l
                   Just _ -> cap l
+              -- Tup' (Str' _:_) -> cap l
               -- Not sure about this.
+              -- Str' _          -> cap l
               Str' x          -> do
                 x' <- findExecutable x
                 case x' of
@@ -487,6 +496,7 @@ pipe _ mem lhs rhs = (do
                   Just _ -> cap l
               Tup' (Pth' _:_) -> cap l
               Pth' _          -> cap l
+              -- _               -> return Nothing
               _               -> return $ Just $ show l
           let
             lout = fromMaybe "" lo
@@ -523,3 +533,263 @@ pipe _ mem lhs rhs = (do
         putStrLn $ "pipe: " ++ show e
         return Nothing
 
+len :: Type -> Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))
+len _ mem lhs rhs = do
+  left  <-
+    case exp2typ mem lhs of
+      Nothing -> return Nothing
+      Just t -> interpret t mem lhs
+  case left of
+    Nothing -> return Nothing
+    Just (ml, l) -> do
+      right <-
+        case exp2typ ml rhs of
+          Nothing -> return Nothing
+          Just t -> interpret t ml rhs
+      case right of
+        Nothing -> return Nothing
+        Just (mr, r) ->
+          case r of
+            Int'   b -> return $ Just (mr, Tup' [l, Int' $ toInteger $ length $ show b])
+            Flt'   b -> return $ Just (mr, Tup' [l, Int' $ toInteger $ length $ show b])
+            Arr' _ b -> return $ Just (mr, Tup' [l, Int' $ toInteger $ length b])
+            Tup'   b -> return $ Just (mr, Tup' [l, Int' $ toInteger $ length b])
+            Pth'   b -> return $ Just (mr, Tup' [l, Int' $ toInteger $ length $ pieces (== '/') b])
+            _        -> return Nothing
+
+range :: Type -> Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))
+range _ mem lhs rhs = do
+  left  <-
+    case exp2typ mem lhs of
+      Nothing -> return Nothing
+      Just t -> interpret t mem lhs
+  case left of
+    Nothing -> return Nothing
+    Just (ml, l) -> do
+      right <-
+        case exp2typ ml rhs of
+          Nothing -> return Nothing
+          Just t -> interpret t ml rhs
+      case right of
+        Nothing -> return Nothing
+        Just (mr, r) ->
+          case (l, r) of
+            (Int' a, Int' b) -> return $ Just (mr, Arr' Tint $ map (Int') [a..b])
+            (Tup' [Int' a, Int' d], Int' b) -> return $ Just (mr, Arr' Tint $ map (Int') [a,d..b])
+            -- This is like, really bad for accuracy but whatever...
+            (Tup' [Flt' a, Int' d], Int' b) -> return $ Just (mr, Arr' Tflt $ map (Flt' . float2Double) [double2Float a,fromInteger d.. fromInteger b])
+            (Tup' [Int' a, Flt' d], Int' b) -> return $ Just (mr, Arr' Tflt $ map (Flt' . float2Double) [fromInteger a,double2Float d.. fromInteger b])
+            (Tup' [Flt' a, Flt' d], Int' b) -> return $ Just (mr, Arr' Tflt $ map (Flt' . float2Double) [double2Float a,double2Float d.. fromInteger b])
+            (Tup' [Int' a, Int' d], Flt' b) -> return $ Just (mr, Arr' Tflt $ map (Flt' . float2Double) [fromInteger a,fromInteger d.. double2Float b])
+            (Tup' [Flt' a, Int' d], Flt' b) -> return $ Just (mr, Arr' Tflt $ map (Flt' . float2Double) [double2Float a,fromInteger d.. double2Float b])
+            (Tup' [Int' a, Flt' d], Flt' b) -> return $ Just (mr, Arr' Tflt $ map (Flt' . float2Double) [fromInteger a,double2Float d.. double2Float b])
+            (Tup' [Flt' a, Flt' d], Flt' b) -> return $ Just (mr, Arr' Tflt $ map (Flt' . float2Double) [double2Float a,double2Float d.. double2Float b])
+            (Chr' a, Chr' b) -> return $ Just (mr, Arr' Tchr $ map (Chr') [a..b])
+            (Tup' [Chr' a, Chr' d], Chr' b) -> return $ Just (mr, Arr' Tchr $ map (Chr') [a,d..b])
+            (Pth' a, Pth' b) ->
+              let
+                parentA = reverse (dropWhile (/= '/') (reverse a))
+                parentB = reverse (dropWhile (/= '/') (reverse b))
+              in
+                if parentA == parentB
+                then do
+                  exists <- doesPathExist parentA
+                  if exists
+                  then do
+                    files <- listDirectory ('/':parentA)
+                    let fcycle = cycle files
+                    return $ Just (mr, Arr' Tpth $ map (Pth') (takeWhile (/= b) (dropWhile (/= a) fcycle)))
+                  else do
+                    putStrLn $ "Directory " ++ a ++ " does not exist."
+                    return Nothing
+                else return Nothing                  
+            _                -> return Nothing
+
+input :: Type -> Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))
+input _ mem lhs rhs = do
+  left <-
+    case exp2typ mem lhs of
+      Nothing -> return Nothing
+      Just t -> interpret t mem lhs
+  case left of
+    Nothing -> return Nothing
+    Just (ml, l) -> do
+      right <-
+        case exp2typ ml rhs of
+          Nothing -> return Nothing
+          Just t -> interpret t ml rhs
+      case right of
+        Nothing -> return Nothing
+        Just (mr, r) -> do
+          line <- getLine
+          case (l, r) of
+            (Tup' [], Tup' []) -> return $ Just (mr, Str' line)
+            _ -> return Nothing
+
+equal :: Type -> Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))
+equal _ mem lhs rhs = do
+  left <-
+    case exp2typ mem lhs of
+      Nothing -> return Nothing
+      Just t -> interpret t mem lhs
+  case left of
+    Nothing -> return Nothing
+    Just (ml, l) -> do
+      right <-
+        case exp2typ ml rhs of
+          Nothing -> return Nothing
+          Just t -> interpret t ml rhs
+      case right of
+        Nothing -> return Nothing
+        Just (mr, r) ->
+          return $ Just (mr, Bln' (l == r))
+
+unequal :: Type -> Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))
+unequal _ mem lhs rhs = do
+  left <-
+    case exp2typ mem lhs of
+      Nothing -> return Nothing
+      Just t -> interpret t mem lhs
+  case left of
+    Nothing -> return Nothing
+    Just (ml, l) -> do
+      right <-
+        case exp2typ ml rhs of
+          Nothing -> return Nothing
+          Just t -> interpret t ml rhs
+      case right of
+        Nothing -> return Nothing
+        Just (mr, r) ->
+          return $ Just (mr, Bln' (l /= r))
+
+less :: Type -> Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))
+less _ mem lhs rhs = do
+  left <-
+    case exp2typ mem lhs of
+      Nothing -> return Nothing
+      Just t -> interpret t mem lhs
+  case left of
+    Nothing -> return Nothing
+    Just (ml, l) -> do
+      right <-
+        case exp2typ ml rhs of
+          Nothing -> return Nothing
+          Just t -> interpret t ml rhs
+      case right of
+        Nothing -> return Nothing
+        Just (mr, r) ->
+          return $ Just (mr, Bln' (l < r))
+
+loe :: Type -> Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))
+loe _ mem lhs rhs = do
+  left <-
+    case exp2typ mem lhs of
+      Nothing -> return Nothing
+      Just t -> interpret t mem lhs
+  case left of
+    Nothing -> return Nothing
+    Just (ml, l) -> do
+      right <-
+        case exp2typ ml rhs of
+          Nothing -> return Nothing
+          Just t -> interpret t ml rhs
+      case right of
+        Nothing -> return Nothing
+        Just (mr, r) ->
+          return $ Just (mr, Bln' (l <= r))
+
+more :: Type -> Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))
+more _ mem lhs rhs = do
+  left <-
+    case exp2typ mem lhs of
+      Nothing -> return Nothing
+      Just t -> interpret t mem lhs
+  case left of
+    Nothing -> return Nothing
+    Just (ml, l) -> do
+      right <-
+        case exp2typ ml rhs of
+          Nothing -> return Nothing
+          Just t -> interpret t ml rhs
+      case right of
+        Nothing -> return Nothing
+        Just (mr, r) ->
+          return $ Just (mr, Bln' (l > r))
+
+moe :: Type -> Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))
+moe _ mem lhs rhs = do
+  left <-
+    case exp2typ mem lhs of
+      Nothing -> return Nothing
+      Just t -> interpret t mem lhs
+  case left of
+    Nothing -> return Nothing
+    Just (ml, l) -> do
+      right <-
+        case exp2typ ml rhs of
+          Nothing -> return Nothing
+          Just t -> interpret t ml rhs
+      case right of
+        Nothing -> return Nothing
+        Just (mr, r) ->
+          return $ Just (mr, Bln' (l >= r))
+
+opposite :: Type -> Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))
+opposite _ mem lhs rhs = do
+  left <-
+    case exp2typ mem lhs of
+      Nothing -> return Nothing
+      Just t -> interpret t mem lhs
+  case left of
+    Nothing -> return Nothing
+    Just (ml, l) -> do
+      right <-
+        case exp2typ ml rhs of
+          Nothing -> return Nothing
+          Just t -> interpret t ml rhs
+      case right of
+        Nothing -> return Nothing
+        Just (mr, r) ->
+          case (l, r) of
+            (Tup' [], Bln' b) -> return $ Just (mr, Bln' $ not b)
+            _                 -> return Nothing
+
+and :: Type -> Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))
+and _ mem lhs rhs = do
+  left <-
+    case exp2typ mem lhs of
+      Nothing -> return Nothing
+      Just t -> interpret t mem lhs
+  case left of
+    Nothing -> return Nothing
+    Just (ml, l) -> do
+      right <-
+        case exp2typ ml rhs of
+          Nothing -> return Nothing
+          Just t -> interpret t ml rhs
+      case right of
+        Nothing -> return Nothing
+        Just (mr, r) ->
+          case (l, r) of
+            (Bln' a, Bln' b) -> return $ Just (mr, Bln' $ a || b)
+            _                 -> return Nothing
+
+or :: Type -> Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))
+or _ mem lhs rhs = do
+  left <-
+    case exp2typ mem lhs of
+      Nothing -> return Nothing
+      Just t -> interpret t mem lhs
+  case left of
+    Nothing -> return Nothing
+    Just (ml, l) -> do
+      right <-
+        case exp2typ ml rhs of
+          Nothing -> return Nothing
+          Just t -> interpret t ml rhs
+      case right of
+        Nothing -> return Nothing
+        Just (mr, r) ->
+          case (l, r) of
+            (Bln' a, Bln' b) -> return $ Just (mr, Bln' $ a || b)
+            _                 -> return Nothing
