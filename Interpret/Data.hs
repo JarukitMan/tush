@@ -64,8 +64,10 @@ instance Show Token where
 -- Strict form of token.
 data Value =
   Int' Integer | Flt' Double | Chr' Char | Str' String | Bln' Bool | Pth' String | Typ' Type |
-  Arr' Type [Value] | Tup' [Value]
+  Arr' Type [Value] | Tup' [Value] | Break -- | Sig' Signal
   deriving (Ord, Eq)
+
+-- data Signal = Break | Continue | Return
 
 instance Show Value where
   show :: Value -> String
@@ -80,11 +82,12 @@ instance Show Value where
       Typ' typ -> show typ
       Arr' _ x -> '[':(intercalate " " $ map show x)   ++ "]"
       Tup' tup -> '(':(intercalate " " $ map show tup) ++ ")"
+      Break    -> "Break"
 
 -- Added a "break" type for sending the break signal to the for/while loop controller.
 data Type =
   Tint | Tflt | Tchr | Tstr | Ttyp | Tbln | Tpth |
-  Tarr Type | Ttup [Type] | Tnon | Tany | Break
+  Tarr Type | Ttup [Type] | Tnon | Tany | Tbrk
   deriving (Show, Ord, Eq)
 
 -- instance Eq Type where
@@ -113,7 +116,7 @@ data Type =
 -- Shows output type.
 -- Defined stores a scope so that it could only access the memory it has
 data Operator =
-  Base (Type -> Memory -> Expression -> Expression -> IO (Maybe (Memory, Value))) Type |
+  Base (Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))) Type |
   Defined Word8 (VarTree, Expression) Type
 
 -- Might not work as intended if a VarGroup contains only one VarName.
@@ -196,6 +199,7 @@ val2typ val =
     Typ' _     -> Ttyp
     Arr' typ _ -> Tarr typ
     Tup' tup   -> Ttup (map val2typ tup)
+    Break      -> Tbrk
 
 tok2typ :: Memory -> Token -> Type
 tok2typ mem t =
@@ -260,6 +264,7 @@ argify val =
     Typ' typ -> [show typ]
     Tup' tup -> concat $ map argify tup
     Arr' _ arr -> concat $ map argify arr
+    Break    -> []
 
 -- Wanna make it better, but I don't know how.
 argIO :: [Value] -> IO [String]

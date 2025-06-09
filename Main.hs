@@ -26,10 +26,10 @@ main = do
           -- putStrLn $ "\ESC[1;32m[TOKENS]\ESC[0m\n" ++ (show tokens)
           -- putStrLn $ "\ESC[1;32m[PARTS]\ESC[0m\n"  ++ (show $ bunch tokens)
           -- putStrLn $ "\ESC[1;32m[SENTENCE]\ESC[0m\n"  ++ ((show . parse) tokens)
-          result <- ((interpret Tany initmem) . parse) tokens
+          result <- ((interpret True Tany initmem) . parse) tokens
           case result of
             Nothing -> return ()
-            Just (_, out) -> do
+            Just (_, _, out) -> do
               -- output <- cap out
               -- case output of
               --   Nothing -> putStrLn "Nothing!"
@@ -44,12 +44,12 @@ main = do
           return ()
         Left  errmsg -> putStrLn $ "\ESC[1;31m[ERROR]\ESC[0m\n" ++ errmsg
     Nothing -> do
-      _ <- mainLoop initmem
+      _ <- mainLoop True initmem
       return ()
 
 -- The main loop acts like a for loop here.
-mainLoop :: Memory -> IO Memory
-mainLoop mem = do
+mainLoop :: Bool -> Memory -> IO (Bool, Memory)
+mainLoop gbs mem = do
   -- cwd  <- getCurrentDirectory
   prompt <- tempprompt
   putStr prompt
@@ -64,9 +64,9 @@ mainLoop mem = do
         -- putStrLn $ "\ESC[1;32m[TOKENS]\ESC[0m\n" ++ (show tokens)
         -- putStrLn $ "\ESC[1;32m[PARTS]\ESC[0m\n"  ++ (show $ bunch tokens)
         -- putStrLn $ "\ESC[1;32m[SENTENCE]\ESC[0m\n"  ++ ((show . parse) tokens)
-        result <- ((interpret Tany mem) . parse) tokens
+        result <- ((interpret gbs Tany mem) . parse) tokens
         case result of
-          Just (newmem, out) -> do
+          Just (nbs, newmem, out) -> do
             -- output <- cap out
             -- case output of
             --   Nothing -> putStrLn "Nothing!"
@@ -79,13 +79,13 @@ mainLoop mem = do
               Tup' [ ] -> return ()
               -- Makeshift solution for the leftover () after all the operations.
               _ -> putStrLn $ show out
-            mainLoop newmem
-          Nothing -> mainLoop mem
+            mainLoop nbs newmem
+          Nothing -> mainLoop gbs mem
       Left  errmsg -> do
         putStrLn $ "\ESC[1;31m[ERROR]\ESC[0m\n" ++ errmsg
-        mainLoop mem
+        mainLoop gbs mem
   else
-    return mem
+    return $ (gbs, mem)
 
 -- The actual thing will fetch from the config file.
 -- This is a placeholder function that doesn't actually exist.
@@ -108,8 +108,7 @@ initmem =
             (empty, Nothing)
           )
         ),
-        ("&", Op 0
-          (
+        ("&", Op 0 (
             (empty, Nothing)
           )
         ),
@@ -185,11 +184,11 @@ initmem =
             (empty, Nothing)
           )
         ),
-        ("return", Op 7
-          (
-            (empty, Nothing)
-          )
-        ),
+        -- ("return", Op 7
+        --   (
+        --     (empty, Nothing)
+        --   )
+        -- ),
         ("break", Op 7
           (
             (empty, Nothing)

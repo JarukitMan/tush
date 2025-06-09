@@ -8,11 +8,11 @@ FIX:
 
 TODO:
 - Implement (hack) return, continue, and break.
-- `break` and `return` could be return () and
+- `break` and `return` could be return () and <- Plan is to use the type system to signal breaks, but perhaps a signal is needed.
     ^           ^ do nothing.
     signal the loop to end somehow.
 - Base operations
-- Remaining: type-casts, function definition, control-flow, let, =, <-, ->, =>, &
+- Remaining: control-flow, let, =, function definition, <-, ->, =>, &
 - Implement the global boolean state.
 - Map operations to names
 - Implement Grr.
@@ -32,7 +32,9 @@ Lang part:
 - Slices, anonymous functions, libraries.
 - Compiled version.
 - Real generic support.
+- Seperate IO operations and non-IO operations. This will allow for better handling of both.
+- Make a "Hare" variant. A lazy, probably faster version.
 
 NOTES:
-Pipe is just eval left and pass it to system and feed out to right process.
+Currently, pipe is just eval left and pass it to system and feed out to right process.
 Redirect is just eval right, NOT passing it to system, then feed to left process.

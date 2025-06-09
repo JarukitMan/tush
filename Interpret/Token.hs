@@ -160,16 +160,26 @@ pmtMaybe x =
     _     -> Nothing
 
 preprocess :: String -> String
-preprocess ('i':'f':' ':xs) = "if" ++ ('(':front) ++ (')':back)
-  where (front, back) = splitWith (`elem` "({") xs
+preprocess ('c':'o':'n':'t':'i':'n':'u':'e':' ':xs) = "return () " ++ xs
 preprocess ('o':'p':'r':' ':xs) = "opr" ++ ('(':front) ++ (')':back)
   where (front, back) = splitWith (== '=') xs
+preprocess ('i':'f':' ':xs) =
+  if not $ null $ filter (\x -> not $ x `elem` " \t\r\n") front
+  then "if" ++ ('(':front) ++ (')':back)
+  else "if " ++ preprocess xs
+  where (front, back) = splitWith (`elem` "({") xs
 preprocess ('f':'o':'r':' ':xs) =
   case words front of
-    (x:"in":xs') -> "foreach" ++ ('(':x) ++ (' ':unwords xs') ++ (')':back)
-    _ -> "for" ++ ('(':front) ++ (')':back)
+    (x:"in":xs') -> "foreach" ++ ('(':x) ++ (',':' ':unwords xs') ++ (')':back)
+    _ ->
+      if not $ null $ filter (\x -> not $ x `elem` " \t\r\n") front
+      then "for" ++ ('(':front) ++ (')':back)
+      else "for " ++ preprocess xs
   where (front, back) = splitWith (`elem` "({") xs
-preprocess ('w':'h':'i':'l':'e':' ':xs) = "while" ++ ('(':front) ++ (')':back)
+preprocess ('w':'h':'i':'l':'e':' ':xs) =
+  if not $ null $ filter (\x -> not $ x `elem` " \t\r\n") front
+  then "while" ++ ('(':front) ++ (')':back)
+  else "while " ++ preprocess xs
   where (front, back) = splitWith (`elem` "({") xs
 preprocess [] = []
 preprocess (x:xs) = x:(preprocess xs)
