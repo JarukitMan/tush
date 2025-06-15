@@ -1,7 +1,7 @@
-module Interpret.Evaluate where
--- import Interpret.Token
-import Interpret.Data
-import Interpret.Parse
+module Tssl.Evaluate where
+-- import Tssl.Token
+import Tssl.Data
+import Tssl.Parse
 import System.Directory
 import qualified Data.Map as M
 import Misc
@@ -40,7 +40,7 @@ interpret b t mem (Expression _ opr left right) =
                     Nothing -> do
                       putStrLn $
                         "Operator `" ++ opr ++ "` does not contain a variation that accepts type "
-                        ++ show (exp2typ mem left) ++ " and " ++ show (exp2typ mem right)
+                        ++ show lefts ++ " and " ++ show rights
                       return Nothing
                     Just (Base opfun _) -> opfun b t mem left right
                     Just (Defined scopenum (names, optree) _) -> do
@@ -67,7 +67,10 @@ interpret b _ mem (Operand x) =
       case getMem mem var of
         Just dat ->
           case dat of
-            Val val  -> return $ Just (b, mem, val)
+            Val (Right val) -> return $ Just (b, mem, val)
+            Val (Left  typ) -> do
+              putStrLn $ "Variable of type `" ++ show typ ++ "` does not have a value assigned to it."
+              return Nothing
             Op _ _ -> do
               putStrLn  $ "Evaluation Error: Operand `" ++ var ++ "` stored as a variable name."
               return Nothing
@@ -182,7 +185,7 @@ interpret b _ mem (Operand x) =
                           case out of
                             Nothing -> return Nothing
                             Just (gb', m', result) ->
-                              return $ Just (gb', m', (vCollapse result):ys)
+                              return $ Just (gb', m', (Right $ vCollapse result):ys)
                         tok -> do
                           -- Just (_, result) <- ((interpret t $ newscope mem) . parse) [tok]
                           out <-
@@ -192,14 +195,19 @@ interpret b _ mem (Operand x) =
                           case out of
                             Nothing -> return Nothing
                             Just (gb', m', result) ->
-                              return $ Just (gb', m', result:ys)
+                              return $ Just (gb', m', Right result:ys)
                 )
                 (return $ Just (b, mem, []))
                 xs
             resultRev <- resultReversed
             case resultRev of
               Nothing -> return Nothing
-              Just (b', mem', resultR) -> return $ Just (b', mem', reverse resultR)
+              Just (b', mem', resultR) ->
+                case sequence resultR of
+                  Right resultRightR -> return $ Just (b', mem', reverse resultRightR)
+                  Left  errtype      -> do
+                    putStrLn $ "Some variable in tuple `" ++ show xs ++ "` of type `" ++ show errtype ++ "` does not contain a value."
+                    return Nothing
                 
             -- return $ sequence thing
             

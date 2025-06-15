@@ -1,4 +1,4 @@
-module Interpret.Data where
+module Tssl.Data where
 
 import qualified Data.Map as M
 import Data.Word(Word8)
@@ -19,14 +19,25 @@ type Memory = [(M.Map String Data)]
 newscope :: Memory -> Memory
 newscope mem = M.empty:mem
 
+insertMem :: String -> Data -> Memory -> Memory
+insertMem dname dat (m:ms) =  (M.insert dname dat m):ms
+insertMem dname dat [] =  [M.insert dname dat M.empty]
+
+insertVar :: String -> Value -> Memory -> Memory
+insertVar vname val (m:ms) = (M.insert vname (Val $ Right val) m):ms
+insertVar vname val [] = [M.insert vname (Val $ Right val) M.empty]
+
+insertBlankVar :: String -> Type -> Memory -> Memory
+insertBlankVar vname typ (m:ms) = (M.insert vname (Val $ Left typ) m):ms
+insertBlankVar vname typ [] =     [M.insert vname (Val $ Left typ) M.empty]
 -- Op in the Value enumuration returns the cardinality, scope and
 -- a map from input types to the operand names, body, and output type.
 -- This is done so that one single namespace is used
 -- for both variables and operators while allowing overloading. 
 -- Op is rank, map from types to body
 -- The opmap is converted to (Map left -> (Map right -> op, op if right doesn't match (any)), (Map right -> op, op if both don't match (any)) if left doesn't match (any))
-data Data = Op Word8 OpMap | Val Value
-  deriving (Show)
+data Data = Op Word8 OpMap | Val (Either Type Value)
+  deriving (Show, Eq)
 type OpMap = (M.Map Type (M.Map Type Operator, Maybe Operator), Maybe (M.Map Type Operator, Maybe Operator))
 
 data Token =
@@ -90,6 +101,28 @@ data Type =
   Tarr Type | Ttup [Type] | Tnon | Tany | Tbrk
   deriving (Show, Ord, Eq)
 
+hasTany :: Type -> Bool
+hasTany typ =
+  case typ of
+    Tarr tin -> hasTany tin
+    Ttup ts  -> or (map hasTany ts)
+    Tany     -> True
+    _        -> False
+
+-- Used to handle compound types like [Int] or (Int Chr (Flt [Str]))
+-- Can't used tok2typ for it.
+compoundType :: Token -> Maybe Type
+compoundType tok =
+  case tok of
+    Typ t  -> Just t
+    Arr ts -> do
+      typs <- sequence $ map compoundType ts
+      Just $ Tarr $ tCollapse (Ttup typs)
+    Tup ts -> do
+      typs <- sequence $ map compoundType ts
+      Just $ tCollapse (Ttup typs)
+    _ -> Nothing
+
 -- instance Eq Type where
 --   (==) :: Type -> Type -> Bool
 --   Tany == _ = True
@@ -119,9 +152,14 @@ data Operator =
   Base (Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))) Type |
   Defined Word8 (VarTree, Expression) Type
 
+instance Eq Operator where
+  (==) :: Operator -> Operator -> Bool
+  Defined w1 (v1, e1) t1 == Defined w2 (v2, e2) t2 = and [w1 == w2, v1 == v2, e1 == e2, t1 == t2]
+  _ == _ = False
+
 -- Might not work as intended if a VarGroup contains only one VarName.
 zipVar :: VarTree -> Value -> Maybe [(String, Data)]
-zipVar (VarName vn) val = Just [(vn, Val val)]
+zipVar (VarName vn) val = Just [(vn, Val $ Right val)]
 zipVar (VarGroup vg) val =
   case val of
     Tup' tup ->
@@ -134,6 +172,7 @@ zipVar (VarGroup vg) val =
     _ -> Nothing
 
 data VarTree = VarName String | VarGroup [VarTree]
+  deriving (Eq)
 instance Show Operator where
   show :: Operator -> String
   show op =
@@ -146,20 +185,20 @@ insertOp (left, right) op (lmap, lany) =
   if left == Tany
   then
     case lany of
-      Just (rmap, rany) -> insertRight rmap rany
-      Nothing ->
-        if right == Tany
-        then (lmap, Just (M.empty, Just op))
-        else (lmap, Just (M.singleton right op, Nothing))
+      Just (rmap, rany) -> (lmap, Just $ insertRight rmap rany)
+      Nothing -> (lmap, Just $ insertRight M.empty Nothing)
+        -- if right == Tany
+        -- then (lmap, Just (M.empty, Just op))
+        -- else (lmap, Just (M.singleton right op, Nothing))
   else
     case left `M.lookup` lmap of
-      Just (rmap, rany) -> insertRight rmap rany
-      Nothing    -> (M.insert left (M.singleton right op, Nothing) lmap, lany)
+      Just (rmap, rany) -> (M.insert left (insertRight rmap rany) lmap, lany)
+      Nothing -> (M.insert left (insertRight M.empty Nothing) lmap, lany)
   where
     insertRight rmap rany =
       if right == Tany
-      then (lmap, Just (M.empty, Just op))
-      else (lmap, Just (M.insert right op rmap, rany))
+      then (rmap, Just op)
+      else (M.insert right op rmap, rany)
 
 lookupOp :: (Type, Type) -> OpMap -> Maybe Operator
 lookupOp (left, right) (lmap, lany) =
@@ -187,6 +226,12 @@ getMem (x:xs) key =
     Nothing -> getMem xs key
     result  -> result
 
+getTopOpMap :: Memory -> String -> OpMap
+getTopOpMap (m:_) opname =
+  case M.lookup opname m of
+    Just (Op _ opmap) -> opmap
+    _ -> (M.empty, Nothing)
+getTopOpMap [] _ = (M.empty, Nothing)
 val2typ :: Value -> Type
 val2typ val =
   case val of 
@@ -223,7 +268,8 @@ tok2typ mem t =
         Just dat ->
           case dat of
             Op _ _  -> Tany
-            Val val -> val2typ val
+            Val (Right val) -> val2typ val
+            Val (Left  typ) -> typ
 
 -- (a) -> a repeatedly.
 collapse :: Token -> Token
@@ -345,6 +391,42 @@ cmd val =
         _ ->
           (argIO args) >>=
           (\args' -> callProcess (show command) args')
+
+cmdConc :: Value -> IO ()
+cmdConc val =
+  case val of
+    Tup' (command:args) -> exec command args
+    Arr' _ (command:args) -> exec command args
+    Str' command          -> exec (Str' command) []
+    Pth' command          -> exec (Pth' command) []
+    _ -> putStrLn $ show val
+  where
+    handler :: IOError -> IO ()
+    handler e = putStrLn $ "cmd: " ++ show e
+    exec command args = (exec' command args) `catch` handler
+    exec' command args =
+      case command of
+        Tup' _   -> do
+          out <- cap command
+          args' <- argIO args
+          case out of
+            Nothing -> return ()
+            Just out' ->
+              spawnProcess out' args' >>=
+              \_ -> return ()
+        Arr' _ _ -> do
+          out <- cap command
+          args' <- argIO args
+          case out of
+            Nothing -> return ()
+            Just out' ->
+              spawnProcess out' args' >>=
+              \_ -> return ()
+        _ ->
+          (argIO args) >>=
+          (\args' ->
+            spawnProcess (show command) args') >>=
+            \_ -> return ()
       
 -- For usage in parts where the output needs to be captured.
 -- E.G: tuples that includes this verse in its return value.

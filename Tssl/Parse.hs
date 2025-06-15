@@ -1,8 +1,8 @@
-module Interpret.Parse where
--- module Interpret.Parse(parse) where
+module Tssl.Parse where
+-- module Tssl.Parse(parse) where
 -- Only exposes parse
 
-import Interpret.Data
+import Tssl.Data
 import Misc
 -- import Data.Map(Map)
 -- import Data.Word

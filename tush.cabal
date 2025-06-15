@@ -20,11 +20,11 @@ executable tush
     import:           warnings
     main-is:          Main.hs
     other-modules:    Misc,
-                      Interpret.Token,
-                      Interpret.Parse,
-                      Interpret.Evaluate,
-                      Interpret.Data,
-                      Interpret.Operators,
+                      Tssl.Token,
+                      Tssl.Parse,
+                      Tssl.Evaluate,
+                      Tssl.Data,
+                      Tssl.Operators,
     -- other-extensions:
     build-depends:    base ^>=4.21.0.0,
                       brick,

@@ -1,21 +1,21 @@
-module Interpret.Token(tokenize) where
+module Tssl.Token(tokenize) where
 import Misc
 -- import qualified Data.Map as M 
-import Interpret.Data
+import Tssl.Data
 -- import Data.Word
 
 tokenize :: Memory -> String -> Either String [Token]
-tokenize memory x = case (chunkify . preprocess) x of
+tokenize memory x = case (chunkify) x of
   Left errmsg -> Left errmsg
   Right (chunks, rest) ->
     if null rest
-    then Right $ map (checkWord memory) chunks
+    then Right $ map (checkWord memory) (preprocess chunks)
     else Left "Unmatched Right Delimiter ({[]})"
 
 data Chunk =
   Word String | Character Char | String String | FString [Chunk] | Tuple [Chunk] | Array [Chunk]
   -- Period | Pipe | Endline
-  deriving (Show)
+  deriving (Show, Eq)
 
 chunkify :: String -> Either String ([Chunk], String)
 -- Catch chars
@@ -152,34 +152,52 @@ pmtMaybe x =
     "Int" -> Just Tint
     "Chr" -> Just Tchr
     "Str" -> Just Tstr
-    "Fmt" -> Just Tstr
     "Flt" -> Just Tflt
     "Bln" -> Just Tbln
     "Typ" -> Just Ttyp
     "Pth" -> Just Tpth
     _     -> Nothing
 
-preprocess :: String -> String
-preprocess ('c':'o':'n':'t':'i':'n':'u':'e':' ':xs) = "return () " ++ xs
-preprocess ('o':'p':'r':' ':xs) = "opr" ++ ('(':front) ++ (')':back)
-  where (front, back) = splitWith (== '=') xs
-preprocess ('i':'f':' ':xs) =
-  if not $ null $ filter (\x -> not $ x `elem` " \t\r\n") front
-  then "if" ++ ('(':front) ++ (')':back)
-  else "if " ++ preprocess xs
-  where (front, back) = splitWith (`elem` "({") xs
-preprocess ('f':'o':'r':' ':xs) =
-  case words front of
-    (x:"in":xs') -> "foreach" ++ ('(':x) ++ (',':' ':unwords xs') ++ (')':back)
-    _ ->
-      if not $ null $ filter (\x -> not $ x `elem` " \t\r\n") front
-      then "for" ++ ('(':front) ++ (')':back)
-      else "for " ++ preprocess xs
-  where (front, back) = splitWith (`elem` "({") xs
-preprocess ('w':'h':'i':'l':'e':' ':xs) =
-  if not $ null $ filter (\x -> not $ x `elem` " \t\r\n") front
-  then "while" ++ ('(':front) ++ (')':back)
-  else "while " ++ preprocess xs
-  where (front, back) = splitWith (`elem` "({") xs
+-- preprocess :: String -> String
+-- preprocess ('c':'o':'n':'t':'i':'n':'u':'e':' ':xs) = "return () " ++ xs
+-- preprocess ('o':'p':'r':' ':xs) = "opr" ++ ('(':front) ++ (')':back)
+--   where (front, back) = splitWith (== '=') xs
+-- preprocess ('i':'f':' ':xs) =
+--   if not $ null $ filter (\x -> not $ x `elem` " \t\r\n") front
+--   then "if" ++ ('(':front) ++ (')':back)
+--   else "if " ++ preprocess xs
+--   where (front, back) = splitWith (`elem` "({") xs
+-- preprocess ('f':'o':'r':' ':xs) =
+--   case words front of
+--     (x:"in":xs') -> "foreach" ++ ('(':x) ++ (',':' ':unwords xs') ++ (')':back)
+--     _ ->
+--       if not $ null $ filter (\x -> not $ x `elem` " \t\r\n") front
+--       then "for" ++ ('(':front) ++ (')':back)
+--       else "for " ++ preprocess xs
+--   where (front, back) = splitWith (`elem` "({") xs
+-- preprocess ('w':'h':'i':'l':'e':' ':xs) =
+--   if not $ null $ filter (\x -> not $ x `elem` " \t\r\n") front
+--   then "while" ++ ('(':front) ++ (')':back)
+--   else "while " ++ preprocess xs
+--   where (front, back) = splitWith (`elem` "({") xs
+-- preprocess [] = []
+-- preprocess (x:xs) = x:(preprocess xs)
+preprocess :: [Chunk] -> [Chunk]
 preprocess [] = []
-preprocess (x:xs) = x:(preprocess xs)
+preprocess (chunk:ts)
+  |
+  chunk `elem` [Word "if", Word "for", Word "while"] =
+    case splitWith (\t -> case t of {Tuple _ -> True ; _ -> False}) ts of
+      ([], _) -> chunk:preprocess ts
+      (_, []) -> chunk:preprocess ts
+      (front, back) -> chunk:Tuple front:preprocess back
+  |
+  chunk == Word "continue" = Word "return":Tuple []:preprocess ts
+  |
+  chunk == Word "opr" =
+    case splitWith (/= Word "=") ts of
+      ([], _) -> chunk:preprocess ts
+      (_, []) -> chunk:preprocess ts
+      (front, back) -> chunk:Tuple front:preprocess back
+  |
+  otherwise = chunk:preprocess ts

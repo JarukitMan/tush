@@ -243,18 +243,28 @@ it would just be saved as `{let x = 1, let y = 2, return x + y}` and not evaluat
 
 #### Operator precedence. High to low. (TODO)
 
-255. Closure
-10. IO
-9. Structural (except for range)
-8. Type
-7. (default) User-defined operators (functions)
-6. Arithmatic
-5. Range
-4. Boolean
-3. Control Flow
-2. Definition
-1. Variadic functions (Includes external calls)
-0. Pipers ( "<-" > the rest)
+Bottom level - Closure
+255 - IO
+254 - cmd $
+17 - User-defined operators
+16 - .
+15 - type-casts
+14 - len
+13 - multiplication and division
+12 - addition and subtraction
+11 - ..
+10 - < > <= >= == /=
+9  - not
+8  - && ||
+7  - continue break return
+6  - control-flow
+5  - cd time help
+4  - definition and declaration
+3  - <-
+2  - -> =>
+1  - |
+0  - , &
+
 
 #### Note:
 

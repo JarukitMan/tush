@@ -1,5 +1,4 @@
 FIX:
-- handletup can't evaluate nested tuples.
 - Capturing stdout while letting it print out naturally in `cap`.
 - Proper pipelining. Might have to pass handles around to also allow for background processes to be resumed.
 - ^ Currently, it outputs a string so when "," gets it, it thinks it's a command and passes it to the system.
@@ -7,16 +6,12 @@ FIX:
 - Implement a better way to check types. Currently can't check Tarr Tany or anything like that. This screws with BaseOp type-checking.
 
 TODO:
-- Implement (hack) return, continue, and break.
-- `break` and `return` could be return () and <- Plan is to use the type system to signal breaks, but perhaps a signal is needed.
-    ^           ^ do nothing.
-    signal the loop to end somehow.
-- Base operations
-- Remaining: control-flow, let, =, function definition, <-, ->, =>, &
-- Implement the global boolean state.
+- Add debug messages to the base operations.
+- Add help and time operators.
 - Map operations to names
 - Implement Grr.
 - Implement Imp.
+- Implement Tsf.
 
 FUTURE:
 Front part:
@@ -27,6 +22,7 @@ Front part:
 Lang part:
 - Make "," follow spec.
 - Rust style enum and match, which implies switch case.
+- Basically, pattern matching. This applies to variable assignment too.
 - Struct and typeclass/trait.
 - More string types. E.G. lit string, regex string, whatever.
 - Slices, anonymous functions, libraries.
