@@ -140,7 +140,7 @@ checkWord memory x =
                     Nothing  ->
                       case pthMaybe x' of
                         Just pth -> Pth pth
-                        Nothing  -> Str x'
+                        Nothing  -> Wrd x'
     tok2fmt x' =
       case x' of
         Str s -> Left  s
@@ -156,6 +156,7 @@ pmtMaybe x =
     "Bln" -> Just Tbln
     "Typ" -> Just Ttyp
     "Pth" -> Just Tpth
+    "Any" -> Just Tany
     _     -> Nothing
 
 -- preprocess :: String -> String
@@ -184,6 +185,11 @@ pmtMaybe x =
 -- preprocess (x:xs) = x:(preprocess xs)
 preprocess :: [Chunk] -> [Chunk]
 preprocess [] = []
+preprocess (Word "for":x:Word "in":xs) =
+      case splitWith (\t -> case t of {Tuple _ -> True ; _ -> False}) xs of
+        ([], _) -> x:preprocess xs
+        (_, []) -> x:preprocess xs
+        (front, back) -> Word "foreach":Tuple [x, Word ",", Tuple front]:preprocess back
 preprocess (chunk:ts)
   |
   chunk `elem` [Word "if", Word "for", Word "while"] =

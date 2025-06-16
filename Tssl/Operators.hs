@@ -350,6 +350,7 @@ dot gbs etp mem lhs rhs = do
                 (Arr' _ a, Int' b)     -> a !? (fromInteger b)
                 (Arr' t a, Arr' Tint b) -> Just $ Arr' t $ map snd (filter (\(i, _) -> Int' i `elem` b) (zip [0..] a))
                 (Tup' a, Arr' Tint b) -> Just $ Tup' $ map snd (filter (\(i, _) -> Int' i `elem` b) (zip [0..] a))
+                (Tup' [], Tup' []) -> Just $ Pth' "."
                 _                      -> Nothing
           in
             case dotv l r of
@@ -452,11 +453,11 @@ next gbs etp mem lhs rhs = catch (do
     check a =
         case a of
           Str' x            -> execOr x
-          Tup' ((Str' x):_) -> execOr x
-          Arr' Tstr (x:_)   -> execOr $ show x
+          -- Tup' ((Str' x):_) -> execOr x
+          -- Arr' Tstr (x:_)   -> execOr $ show x
           -- Str' _            -> cmd a >>= \_ -> return $ Tup' []
-          -- Tup' ((Str' _):_) -> cmd a >>= \_ -> return $ Tup' []
-          -- Arr' Tstr _       -> cmd a >>= \_ -> return $ Tup' []
+          Tup' ((Str' _):_) -> cmd a >>= \_ -> return $ Tup' []
+          Arr' Tstr _       -> cmd a >>= \_ -> return $ Tup' []
           -- Because they aren't necessarily in PATH
           Pth' _            -> cmd a >>= \_ -> return $ Tup' []
           Tup' ((Pth' _):_) -> cmd a >>= \_ -> return $ Tup' []
@@ -520,27 +521,27 @@ also gbs etp mem lhs rhs = catch (do
     -- didn't mean screwing up the user experience.
     check a =
         case a of
-          Str' x            -> execOr x
-          Tup' ((Str' x):_) -> execOr x
-          Arr' Tstr (x:_)   -> execOr $ show x
+          -- Str' x            -> execOr x
+          -- Tup' ((Str' x):_) -> execOr x
+          -- Arr' Tstr (x:_)   -> execOr $ show x
           -- Str' _            -> cmdConc a >>= \_ -> return $ Tup' []
-          -- Tup' ((Str' _):_) -> cmdConc a >>= \_ -> return $ Tup' []
-          -- Arr' Tstr _       -> cmdConc a >>= \_ -> return $ Tup' []
+          Tup' ((Str' _):_) -> cmdConc a >>= \_ -> return $ Tup' []
+          Arr' Tstr _       -> cmdConc a >>= \_ -> return $ Tup' []
           -- Because they aren't necessarily in PATH
           Pth' _            -> cmdConc a >>= \_ -> return $ Tup' []
           Tup' ((Pth' _):_) -> cmdConc a >>= \_ -> return $ Tup' []
           Arr' Tpth _       -> cmdConc a >>= \_ -> return $ Tup' []
           _ -> return a
-          where
-            execOr x = do
-              path <- findExecutable x
-              case path of
-                Nothing -> return a
-                Just _ ->
-                  cmdConc a >>= \_ -> return (Tup' [])
-                  -- aout <- cap a
-                  -- case aout of Nothing -> return $ Tup' []
-                  --   Just o  -> return $ Str' o
+          -- where
+          --   execOr x = do
+          --     path <- findExecutable x
+          --     case path of
+          --       Nothing -> return a
+          --       Just _ ->
+          --         cmdConc a >>= \_ -> return (Tup' [])
+          --         -- aout <- cap a
+          --         -- case aout of Nothing -> return $ Tup' []
+          --         --   Just o  -> return $ Str' o
     handler :: IOError -> IO (Maybe a)
     handler e = do
         putStrLn $ "pipe: " ++ show e
@@ -567,23 +568,24 @@ pipe gbs _ mem lhs rhs = (do
           -- Can't just not wait for the process. I'd have to pass it around.
           lo <-
             case l of
-              Tup' (Str' x:_) -> do
-                x' <- findExecutable x
-                case x' of
-                  Nothing -> return $ Just $ show l
-                  Just _ -> cap l
-              -- Tup' (Str' _:_) -> cap l
+              -- Tup' (Str' x:_) -> do
+                -- x' <- findExecutable x
+                -- case x' of
+                --   Nothing -> return $ Just $ show l
+                --   Just _ -> cap l
+              Tup' (Str' _:_) -> cap l
               -- Not sure about this.
+              Str' x -> return $ Just x
               -- Str' _          -> cap l
-              Str' x          -> do
-                x' <- findExecutable x
-                case x' of
-                  Nothing -> return $ Just $ show l
-                  Just _ -> cap l
+              -- Str' x          -> do
+              --   x' <- findExecutable x
+              --   case x' of
+              --     Nothing -> return $ Just $ show l
+              --     Just _ -> cap l
               Tup' (Pth' _:_) -> cap l
               Pth' _          -> cap l
-              -- _               -> return Nothing
-              _               -> return $ Just $ show l
+              _               -> return Nothing
+              -- _               -> return $ Just $ show l
           let
             lout = fromMaybe "" lo
             exec x xs = do
@@ -637,30 +639,30 @@ here gbs _ mem lhs rhs = (do
         Just (lbs, ml, l) -> do
           ro <-
             case r of
-              Tup' (Str' x:_) -> do
-                x' <- findExecutable x
-                case x' of
-                  Nothing -> return $ Just $ show r
-                  Just _ -> cap r
-              -- Tup' (Str' _:_) -> cap l
-              -- Not sure about this.
-              -- Str' _          -> cap l
-              Str' x          -> return $ Just x
-                -- x' <- findExecutable x
+              -- Tup' (Str' x:_) -> do
+                -- x' <- findExecutabre x
                 -- case x' of
-                --   Nothing -> return $ Just x
+                --   Nothing -> return $ Just $ show r
                 --   Just _ -> cap r
+              Tup' (Str' _:_) -> cap r
+              -- Not sure about this.
+              Str' x -> return $ Just x
+              -- Str' _          -> cap r
+              -- Str' x          -> do
+              --   x' <- findExecutabre x
+              --   case x' of
+              --     Nothing -> return $ Just $ show r
+              --     Just _ -> cap r
               Tup' (Pth' _:_) -> cap r
               Pth' _          -> cap r
-              -- _               -> return Nothing
-              _               -> return $ Just $ show r
+              _               -> return Nothing
           let
             rout = fromMaybe "" ro
             exec x xs = do
-              x' <- findExecutable x
-              case x' of
-                Nothing -> return $ Just (lbs, ml, Str' $ rout ++ ' ':(show $ vCollapse $ Tup' $ Str' x:xs))
-                Just _  -> do
+              -- x' <- findExecutable x
+              -- case x' of
+              --   Nothing -> return $ Just (lbs, ml, Str' $ rout ++ ' ':(show $ vCollapse $ Tup' $ Str' x:xs))
+              --   Just _  -> do
                   larg <- argIO xs
                   (inp, out, _, landle) <- createProcess (proc x larg) {std_in = CreatePipe, std_out = CreatePipe}
                   case (inp, out) of
@@ -705,13 +707,38 @@ wrt gbs _ mem lhs rhs = do
       case right of
         Nothing -> return Nothing
         Just (rbs, mr, r) -> do
-          (writeFile (unwords (argify r)) (show l)) `catch` handler
-          return $ Just (rbs, mr, Tup' [])
+          file <- openBinaryFile (unwords $ argify r) WriteMode
+          case l of
+            Str' x -> do
+              (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
+              _ <- waitForProcess ph `catch` handler2
+              return $ Just (rbs, mr, Tup' [])
+            Tup' (Str' x:xs) -> do
+              args <- argIO xs
+              (_, _, _, ph) <- createProcess (proc x args) {std_out = UseHandle file}
+              _ <- waitForProcess ph `catch` handler2
+              return $ Just (rbs, mr, Tup' [])
+            Pth' x -> do
+              (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
+              _ <- waitForProcess ph `catch` handler2
+              return $ Just (rbs, mr, Tup' [])
+            Tup' (Pth' x:xs) -> do
+              args <- argIO xs
+              (_, _, _, ph) <- createProcess (proc x args) {std_out = UseHandle file}
+              _ <- waitForProcess ph `catch` handler2
+              return $ Just (rbs, mr, Tup' [])
+            _ -> do
+              (appendFile (unwords (argify r)) (show l)) `catch` handler
+              return $ Just (rbs, mr, Tup' [])
   where
     handler :: IOError -> IO ()
     handler e = do
         putStrLn $ "here: " ++ show e
         return ()
+    handler2 :: IOError -> IO ExitCode
+    handler2 e = do
+        putStrLn $ "here: " ++ show e
+        return $ ExitFailure 1
 
 apn :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
 apn gbs _ mem lhs rhs = do
@@ -729,37 +756,78 @@ apn gbs _ mem lhs rhs = do
       case right of
         Nothing -> return Nothing
         Just (rbs, mr, r) -> do
-          (appendFile (unwords (argify r)) (show l)) `catch` handler
-          return $ Just (rbs, mr, Tup' [])
+          file <- openBinaryFile (unwords $ argify r) AppendMode
+          case l of
+            Str' x -> do
+              (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
+              _ <- waitForProcess ph `catch` handler2
+              return $ Just (rbs, mr, Tup' [])
+            Tup' (Str' x:xs) -> do
+              args <- argIO xs
+              (_, _, _, ph) <- createProcess (proc x args) {std_out = UseHandle file}
+              _ <- waitForProcess ph `catch` handler2
+              return $ Just (rbs, mr, Tup' [])
+            Pth' x -> do
+              (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
+              _ <- waitForProcess ph `catch` handler2
+              return $ Just (rbs, mr, Tup' [])
+            Tup' (Pth' x:xs) -> do
+              args <- argIO xs
+              (_, _, _, ph) <- createProcess (proc x args) {std_out = UseHandle file}
+              _ <- waitForProcess ph `catch` handler2
+              return $ Just (rbs, mr, Tup' [])
+            _ -> do
+              (appendFile (unwords (argify r)) (show l)) `catch` handler
+              return $ Just (rbs, mr, Tup' [])
   where
     handler :: IOError -> IO ()
     handler e = do
         putStrLn $ "here: " ++ show e
         return ()
+    handler2 :: IOError -> IO ExitCode
+    handler2 e = do
+        putStrLn $ "here: " ++ show e
+        return $ ExitFailure 1
+  --       Just (rbs, mr, r) -> do
+  --         lout <- cap l
+  --         case lout of
+  --           Nothing -> return Nothing
+  --           Just lo -> do
+  --             (appendFile (unwords (argify r)) lo) `catch` handler
+  --             return $ Just (rbs, mr, Tup' [])
+  -- where
+  --   handler :: IOError -> IO ()
+  --   handler e = do
+  --       putStrLn $ "here: " ++ show e
+  --       return ()
 
 len :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
-len gbs _ mem lhs rhs = do
-  left  <-
-    case exp2typ mem lhs of
-      Nothing -> return Nothing
-      Just t -> interpret gbs t mem lhs
-  case left of
-    Nothing -> return Nothing
-    Just (lbs, ml, l) -> do
-      right <-
-        case exp2typ ml rhs of
-          Nothing -> return Nothing
-          Just t -> interpret lbs t ml rhs
-      case right of
+len gbs _ mem lhs rhs =
+  -- left  <-
+  --   case exp2typ mem lhs of
+  --     Nothing -> return Nothing
+  --     Just t -> interpret gbs t mem lhs
+  -- case left of
+  --   Nothing -> return Nothing
+  --   Just (lbs, ml, l) -> do
+  if lhs == Operand (Tup [])
+  then do
+    right <-
+      case exp2typ mem rhs of
         Nothing -> return Nothing
-        Just (rbs, mr, r) ->
-          case r of
-            Int'   b -> return $ Just (rbs, mr, Tup' [l, Int' $ toInteger $ length $ show b])
-            Flt'   b -> return $ Just (rbs, mr, Tup' [l, Int' $ toInteger $ length $ show b])
-            Arr' _ b -> return $ Just (rbs, mr, Tup' [l, Int' $ toInteger $ length b])
-            Tup'   b -> return $ Just (rbs, mr, Tup' [l, Int' $ toInteger $ length b])
-            Pth'   b -> return $ Just (rbs, mr, Tup' [l, Int' $ toInteger $ length $ pieces (== '/') b])
-            _        -> return Nothing
+        Just t -> interpret gbs t mem rhs
+    case right of
+      Nothing -> return Nothing
+      Just (rbs, mr, r) ->
+        case r of
+          Int'   b -> return $ Just (rbs, mr, Int' $ toInteger $ length $ show b)
+          Flt'   b -> return $ Just (rbs, mr, Int' $ toInteger $ length $ show b)
+          Arr' _ b -> return $ Just (rbs, mr, Int' $ toInteger $ length b)
+          Tup'   b -> return $ Just (rbs, mr, Int' $ toInteger $ length b)
+          Pth'   b -> return $ Just (rbs, mr, Int' $ toInteger $ length $ pieces (== '/') b)
+          _        -> return Nothing
+  else
+    return Nothing
 
 range :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
 range gbs _ mem lhs rhs = do
@@ -809,6 +877,7 @@ range gbs _ mem lhs rhs = do
                     return Nothing
                 else return Nothing                  
             (Tup' [], Pth' b) -> return $ Just (rbs, mr, Pth' $ ".." ++ b)
+            (Tup' [], Tup' []) -> return $ Just (rbs, mr, Pth' "..")
             _                -> return Nothing
 
 input :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
@@ -1112,7 +1181,7 @@ bln gbs _ mem lhs rhs = do
                 'N' -> return $ Just (rbs, mr, Bln' False)
                 _   -> return Nothing
             (Tup' [], Str' b) ->
-              case readMaybe b of
+              case blnMaybe b of
                 Nothing -> return Nothing
                 Just f -> return $ Just (rbs, mr, Bln' f)
             _                 -> return Nothing
@@ -1185,7 +1254,7 @@ str gbs _ mem lhs rhs = do
         Nothing -> return Nothing
         Just (rbs, mr, r) ->
           case l of
-            Tup' [] -> return $ Just (rbs, mr, Str' $ show r)
+            Tup' [] -> return $ Just (rbs, mr, Str' $ show $ vCollapse r)
             _       -> return Nothing
 
 pth :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
@@ -1222,7 +1291,10 @@ ift gbs etp mem lhs rhs =
             Just (_, ml, l) ->
               if l == Bln' True
               then interpret True etp ml (Operand expression)
-              else return $ Just (False, ml, Tup' [])
+              else do
+                -- DEBUG
+                putStrLn $ show l
+                return $ Just (False, ml, Tup' [])
         _                          -> return Nothing
     _                -> do
       right <-
@@ -1306,8 +1378,8 @@ frl gbs etp mem lhs rhs = do
   case lhs of
     Operand (Tup []) ->
       case rhs of
-        Operand (Tup [predicate, expression]) ->
-          case parse [predicate] of
+        Operand (Tup [Tup predicate, expression]) ->
+          case parse predicate of
             Expression _ "," (Expression _ "," ini pdc) inc -> do
               iniout <- interpret gbs etp (newscope mem) ini
               case iniout of
@@ -1316,7 +1388,7 @@ frl gbs etp mem lhs rhs = do
                   (whl ibs etp im (Expression 0 "," (Operand expression) inc) pdc) >>=
                   (\out -> case out of {Nothing -> return Nothing; Just (obs, om, ov) -> return $ Just (obs, drop 1 om, ov)})
             _ ->
-              (putStrLn $ "Invalid for loop syntax at `" ++ show predicate ++ "`.")
+              (putStrLn $ "Invalid for loop syntax at `" ++ show (parse predicate) ++ "`.")
               >>= (\_ -> return Nothing)
         _ -> (putStrLn $ "Invalid for loop syntax at `" ++ show rhs ++ "`.") >>= (\_ -> return Nothing)
     _ -> do
@@ -1346,8 +1418,8 @@ fre gbs _ mem lhs rhs =
                 case val of
                   Tup'   tup -> return tup
                   Arr' _ arr -> return arr
-                  Pth' path   -> do
-                    exists <- doesDirectoryExist path
+                  Pth' path  -> do
+                    exists  <- doesDirectoryExist path
                     if exists
                     then do
                       paths <- getDirectoryContents path
@@ -1363,7 +1435,7 @@ fre gbs _ mem lhs rhs =
                       case x of
                         Nothing -> return Nothing
                         Just (b, m, ls) -> do
-                          left <- interpret b Tany (insertVar vname i $ newscope m) (Operand expression)
+                          left <- interpret b Tany (insertVar vname i $ newscope m) (Expression 0 "," (Operand $ Tup []) (Operand expression))
                           case left of
                             Nothing -> return Nothing
                             Just (b', m', r) -> return $ Just (b', drop 1 m', r:ls)
@@ -1384,7 +1456,7 @@ fre gbs _ mem lhs rhs =
             case val of
               Tup'   tup -> return tup
               Arr' _ arr -> return arr
-              Pth' path   -> do
+              Pth' path  -> do
                 exists <- doesDirectoryExist path
                 if exists
                 then do
@@ -1401,7 +1473,7 @@ fre gbs _ mem lhs rhs =
                   case x of
                     Nothing -> return Nothing
                     Just (b, m, ls) -> do
-                      left <- interpret b Tany (insertVar vname i $ newscope m) lhs
+                      left <- interpret b Tany (insertVar vname i $ newscope m) (Expression 0 "," (Operand $ Tup []) lhs)
                       case left of
                         Nothing -> return Nothing
                         Just (b', m', r) -> return $ Just (b', drop 1 m', r:ls)
@@ -1432,24 +1504,28 @@ var gbs etp mem lhs rhs =
   if lhs == (Operand $ Tup [])
   then
     case rhs of
-      Operand (Str vname) ->
+      Operand (Wrd vname) ->
         if not $ hasTany etp
         then return $ Just (gbs, insertBlankVar vname etp mem, Str' vname)
         else
           (putStrLn $ "Can't defer the type of the let operation's assigned value. Type signature given is `" ++ show etp ++ "`.") >>=
           \_ -> return Nothing
-      Operand (Tup [Typ tin, Str vname]) ->
+      Operand (Tup [Typ tin, Wrd vname]) ->
         if tin == etp || etp == Tany
         then return $ Just (gbs, insertBlankVar vname etp mem, Str' vname)
         else
           (putStrLn $ "Let statement with defined type `" ++ show tin ++ "` does not match the derived type on the right `" ++ show etp ++ "`.") >>=
           \_ -> return Nothing
-      Operand (Tup [tin, Str vname]) ->
+      Operand (Tup [tin, Wrd vname]) ->
         if compoundType tin == Just etp || etp == Tany
         then return $ Just (gbs, insertBlankVar vname etp mem, Str' vname)
         else
           (putStrLn $ "Let statement with defined type `" ++ show tin ++ "` does not match the derived type on the right `" ++ show etp ++ "`.") >>=
           \_ -> return Nothing
+      -- Catching variables already defined.
+      Operand (Var vname) -> var gbs etp mem lhs (Operand (Wrd vname))
+      Operand (Tup [Typ tin, Var vname]) -> var gbs etp mem lhs (Operand (Tup [Typ tin, Wrd vname]))
+      Operand (Tup [tin, Var vname]) -> var gbs etp mem lhs (Operand (Tup [tin, Wrd vname]))
       _ -> (putStrLn $ "Let statement can't parse right-hand side `" ++ show rhs ++ "`") >>= \_ -> return Nothing
   else (putStrLn "Let statement's left-hand side is not empty.") >>= \_ -> return Nothing
 
@@ -1463,7 +1539,10 @@ opr _ _ _ _ _ =
 asn :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
 asn gbs _ mem lhs rhs= do
   case lhs of
-    Operand (Str vname) -> do
+    -- To catch things already defined.
+    Operand (Var vname) -> asn gbs Tany mem (Operand (Wrd vname)) rhs
+    Operand (Opr _ vname) -> asn gbs Tany mem (Operand (Wrd vname)) rhs
+    Operand (Wrd vname) -> do
       right <-
         case exp2typ mem rhs of
           Nothing -> return Nothing
@@ -1471,9 +1550,30 @@ asn gbs _ mem lhs rhs= do
       case right of
         Nothing -> return Nothing
         Just (rbs, mr, r) ->
-          if getMem mr vname == Just (Val (Right r)) || getMem mr vname == Just (Val (Left $ val2typ r))
-          then return $ Just (rbs, insertVar vname r mr, Tup' [])
-          else return Nothing
+          case getMem mr vname of
+            Just (Val v) ->
+              case v of
+                Left t ->
+                  if t == val2typ r
+                  then do
+                    -- DEBUG
+                    putStrLn $ show $ map (M.filter (\d -> case d of {Op _ _ -> False; Val _ -> True;})) (updateVar vname r mr)
+                    return $ Just (rbs, updateVar vname r mr, Tup' [])
+                  else do
+                    putStrLn $ "Can't assign a value of type `" ++ show (val2typ r) ++ "` to variable `" ++ vname ++ "` of type `" ++  show t ++ "`"
+                    return Nothing
+                Right x ->
+                  if val2typ x == val2typ r
+                  then do
+                    -- DEBUG
+                    putStrLn $ show $ map (M.filter (\d -> case d of {Op _ _ -> False; Val _ -> True;})) (updateVar vname r mr)
+                    return $ Just (rbs, updateVar vname r mr, Tup' [])
+                  else do
+                    putStrLn $ "Can't assign a value of type `" ++ show (val2typ r) ++ "` to variable `" ++ vname ++ "` of type `" ++ show (val2typ x) ++ "`"
+                    return Nothing
+            _ -> do
+              putStrLn $ "Can't assign `" ++ show r ++ "` to  variable `" ++ vname ++ "`."
+              return Nothing
     Expression _ "let" llet rlet -> do
       right <-
         case exp2typ mem rhs of
@@ -1496,19 +1596,37 @@ asn gbs _ mem lhs rhs= do
       -- and VarTree looks like this: VarTree = VarName String | VarGroup [VarTree]
       then do
         let
+          typish :: Token -> Bool
+          typish tok = if compoundType tok == Nothing then False else True
           -- This one doesn't check for invalid things yet. (stuff that aren't types or names)
           splitOp :: [Token] -> Maybe ([Token], String, [Token])
-          splitOp (Str left:Str opname:right) = Just ([Str left], opname, right)
-          splitOp (Var left:Str opname:right) = Just ([Str left], opname, right)
+          splitOp (Wrd left:Wrd opname:right) = Just ([Wrd left], opname, right)
+          splitOp (Var left:Wrd opname:right) = Just ([Wrd left], opname, right)
           splitOp (Opr _ opname:right) = Just ([], opname, right)
           splitOp [] = Nothing
+          splitOp (Tup x1:Wrd x2:xs) =
+            if typish (Tup x1)
+            then
+              case splitOp xs of
+                Nothing -> Nothing
+                Just (l, s, r) -> Just (Tup x1:Wrd x2:l, s, r)
+            else
+              Just ([Tup x1], x2, xs)
+          splitOp (Arr x1:Wrd x2:xs) =
+            if typish (Tup x1)
+            then
+              case splitOp xs of
+                Nothing -> Nothing
+                Just (l, s, r) -> Just (Tup x1:Wrd x2:l, s, r)
+            else
+              Nothing
           splitOp (x:xs) =
             case splitOp xs of
               Nothing -> Nothing
-              Just (l, s, r) -> Just (x:l, s, r) -- typish :: Token -> Bool
-          -- typish tok = if compoundType tok == Nothing then False else True
+              Just (l, s, r) -> Just (x:l, s, r)
           tok2pair :: [Token] -> Maybe (VarTree, Type)
-          tok2pair (tok:Str v:ts) =
+          tok2pair (tok:Var v:ts) = tok2pair (tok:Wrd v:ts)
+          tok2pair (tok:Wrd v:ts) =
             case compoundType tok of
               -- If it's not a compound type, it shouldn't have a string following it.
               Nothing -> Nothing
@@ -1518,7 +1636,6 @@ asn gbs _ mem lhs rhs= do
                   Just (VarName vn, tp) -> Just (VarGroup [VarName v, VarName vn], Ttup [t, tp])
                   -- Can't have a vargroup associate with only one non-tuple type, that's illegal.
                   _ -> Nothing
-          tok2pair (tok:Var v:ts) = tok2pair (tok:Str v:ts)
           tok2pair (Tup tup:ts) =
             case tok2pair tup of
               Nothing -> Nothing
@@ -1529,15 +1646,28 @@ asn gbs _ mem lhs rhs= do
                   -- Can't have a vargroup associate with only one non-tuple type, that's illegal.
                   _ -> Nothing
           tok2pair _ = Nothing
-        case exp2typ mem rhs of
-          Nothing -> return Nothing
-          Just t ->
-            case ropr of
-              -- No expressions due to preprocessing.
-              Operand (Opr _ opname) ->
-                case getMem mem opname of
-                  -- do not insert duplicate operator data
-                  Just (Op rank _) ->
+          zipName :: VarTree -> Type -> [(String, Data)]
+          zipName vt t =
+            case vt of
+              VarName vn -> [(vn, Val $ Left t)]
+              VarGroup vg ->
+                case t of
+                  Ttup tt -> concat $ zipWith (zipName) vg tt
+                  _       -> undefined -- This would mean the parsing was wrong, and would therefore fail.
+        -- case exp2typ mem rhs of
+        --   Nothing -> return Nothing
+        --   Just t ->
+        case ropr of
+          -- No expressions due to preprocessing.
+          Operand (Opr _ opname) ->
+            case getMem mem opname of
+              -- do not insert duplicate operator data
+              Just (Op rank _) ->
+                case exp2typ mem rhs of
+                  Nothing -> do
+                    putStrLn $ "Can't derive the type of the defined operator `" ++ opname ++ "`."
+                    return Nothing
+                  Just t ->
                     return $ Just
                     (
                       gbs,
@@ -1559,8 +1689,13 @@ asn gbs _ mem lhs rhs= do
                       mem,
                       Tup' []
                     )
-                  _ -> return Nothing
-              Operand (Str opname) ->
+              _ -> return Nothing
+          Operand (Wrd opname) ->
+            case exp2typ mem rhs of
+              Nothing -> do
+                putStrLn $ "Can't derive the type of the defined operator `" ++ opname ++ "`."
+                return Nothing
+              Just t ->
                 return $ Just
                 (
                   gbs,
@@ -1582,7 +1717,12 @@ asn gbs _ mem lhs rhs= do
                   mem,
                   Tup' []
                 )
-              Operand (Tup [Int rank, Str opname]) ->
+          Operand (Tup [Int rank, Wrd opname]) ->
+            case exp2typ mem rhs of
+              Nothing -> do
+                putStrLn $ "Can't derive the type of the defined operator `" ++ opname ++ "`."
+                return Nothing
+              Just t ->
                 return $ Just
                 (
                   gbs,
@@ -1604,16 +1744,25 @@ asn gbs _ mem lhs rhs= do
                   mem,
                   Tup' []
                 )
-              -- Needs to not exist yet since the rank is specified.
-              Operand (Tup (Int rank:ts)) ->
-                case splitOp ts of
-                  Nothing -> return Nothing
-                  Just (l, s, r) ->
-                    case (tok2pair l, tok2pair r) of
-                      (Just (ln, lt), Just (rn, rt)) ->
-                        case getMem mem s of
-                          -- do not insert duplicate operator data
-                          Nothing ->
+          -- Needs to not exist yet since the rank is specified.
+          Operand (Tup (Int rank:ts)) ->
+            case splitOp ts of
+              Nothing -> do
+                putStrLn $ "Can't parse the inputs of the defined operator `" ++ show (Tup ts) ++ "`."
+                return Nothing
+              Just (l, s, r) -> do
+                -- DEBUG
+                -- putStrLn $ show (l, s, r)
+                case (tok2pair l, tok2pair r) of
+                  (Just (ln, lt), Just (rn, rt)) ->
+                    case getMem mem s of
+                      -- do not insert duplicate operator data
+                      Nothing ->
+                        case exp2typ (M.fromList (zipName (VarGroup [ln, rn]) (Ttup [lt, rt])):mem) rhs of
+                          Nothing -> do
+                            putStrLn $ "Can't derive the type of the defined operator `" ++ show (Tup ts) ++ "`."
+                            return Nothing
+                          Just t ->
                             return $ Just
                             (
                               gbs,
@@ -1635,21 +1784,26 @@ asn gbs _ mem lhs rhs= do
                               mem,
                               Tup' []
                             )
-                          _ ->
-                            (putStrLn $ "Binding for operation named `" ++ s ++ "` already exists.") >>=
-                            \_ -> return Nothing
                       _ ->
-                        (putStrLn $ "Can't parse operator names/types in declaration `" ++ show ts ++ "`.") >>=
-                        \_ -> return  Nothing
-              Operand (Tup ts) ->
-                case splitOp ts of
-                  Nothing -> return Nothing
-                  Just (l, s, r) ->
-                    case (tok2pair l, tok2pair r) of
-                      (Just (ln, lt), Just (rn, rt)) ->
-                        case getMem mem s of
-                          -- do not insert duplicate operator data
-                          Just (Op rank _) ->
+                        (putStrLn $ "Binding for operation named `" ++ s ++ "` already exists.") >>=
+                        \_ -> return Nothing
+                  _ ->
+                    (putStrLn $ "Can't parse operator names/types in declaration `" ++ show ts ++ "`.") >>=
+                    \_ -> return  Nothing
+          Operand (Tup ts) ->
+            case splitOp ts of
+              Nothing -> do
+                putStrLn $ "Can't parse the inputs of the defined operator `" ++ show (Tup ts) ++ "`."
+                return Nothing
+              Just (l, s, r) ->
+                case (tok2pair l, tok2pair r) of
+                  (Just (ln, lt), Just (rn, rt)) ->
+                    case getMem mem s of
+                      -- do not insert duplicate operator data
+                      Just (Op rank _) ->
+                        case exp2typ (M.fromList (zipName (VarGroup [ln, rn]) (Ttup [lt, rt])):mem) rhs of
+                          Nothing -> return Nothing
+                          Just t ->
                             return $ Just
                             (
                               gbs,
@@ -1671,7 +1825,10 @@ asn gbs _ mem lhs rhs= do
                               mem,
                               Tup' []
                             )
-                          Nothing ->
+                      Nothing ->
+                        case exp2typ (M.fromList (zipName (VarGroup [ln, rn]) (Ttup [lt, rt])):mem) rhs of
+                          Nothing -> return Nothing
+                          Just t ->
                             return $ Just
                             (
                               gbs,
@@ -1693,15 +1850,15 @@ asn gbs _ mem lhs rhs= do
                               mem,
                               Tup' []
                             )
-                          _ ->
-                            (putStrLn $ "Binding for operation named `" ++ s ++ "` already exists as a variable.") >>=
-                            \_ -> return Nothing
                       _ ->
-                        (putStrLn $ "Can't parse operator names/types in declaration `" ++ show ts ++ "`.") >>=
-                        \_ -> return  Nothing
-              _ ->
-                (putStrLn $ "Operator construction can't be parsed.") >>=
-                \_ -> return Nothing
+                        (putStrLn $ "Binding for operation named `" ++ s ++ "` already exists as a variable.") >>=
+                        \_ -> return Nothing
+                  _ ->
+                    (putStrLn $ "Can't parse operator names/types in declaration `" ++ show ts ++ "`.") >>=
+                    \_ -> return  Nothing
+          _ ->
+            (putStrLn $ "Operator construction can't be parsed.") >>=
+            \_ -> return Nothing
       else
         putStrLn "Opr statement's left-hand side is not empty." >>=
         \_ -> return Nothing

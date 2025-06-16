@@ -14,7 +14,7 @@ import Control.Exception
 -- Variables and operators use the same namespace.
 -- Maps name -> value
 -- list for scope, kept track of in main and altered in eval 
-type Memory = [(M.Map String Data)]
+type Memory = [M.Map String Data]
 
 newscope :: Memory -> Memory
 newscope mem = M.empty:mem
@@ -26,6 +26,13 @@ insertMem dname dat [] =  [M.insert dname dat M.empty]
 insertVar :: String -> Value -> Memory -> Memory
 insertVar vname val (m:ms) = (M.insert vname (Val $ Right val) m):ms
 insertVar vname val [] = [M.insert vname (Val $ Right val) M.empty]
+
+updateVar :: String -> Value -> Memory -> Memory
+updateVar vname val (m:ms) =
+  case vname `M.lookup` m of
+    Nothing -> m:(updateVar vname val ms)
+    Just _  -> (M.insert vname (Val $ Right val) m):ms
+updateVar _ _ [] = []
 
 insertBlankVar :: String -> Type -> Memory -> Memory
 insertBlankVar vname typ (m:ms) = (M.insert vname (Val $ Left typ) m):ms
@@ -41,7 +48,7 @@ data Data = Op Word8 OpMap | Val (Either Type Value)
 type OpMap = (M.Map Type (M.Map Type Operator, Maybe Operator), Maybe (M.Map Type Operator, Maybe Operator))
 
 data Token =
-  Var String | Opr Word8 String | Str String | Pth String | Int Integer | Chr Char | Bln Bool | Typ Type |
+  Wrd String | Var String | Opr Word8 String | Str String | Pth String | Int Integer | Chr Char | Bln Bool | Typ Type |
   Tup [Token] | Arr [Token] | Fmt [Either String Token]
   deriving (Eq, Ord)
 
@@ -49,6 +56,7 @@ instance Show Token where
   show :: Token -> String
   show t =
     case t of
+      Wrd   wrd -> "\ESC[30m"    ++ wrd                            ++ "\ESC[0m"
       Var   var -> "\ESC[30m"    ++ var                            ++ "\ESC[0m"
       Opr _ opr -> "\ESC[31m"    ++ opr                            ++ "\ESC[0m"
       Str   str -> "\ESC[32m\""  ++ str                            ++ "\"\ESC[0m"
@@ -220,11 +228,11 @@ data Expression = Expression Word8 String Expression Expression | Operand Token
   deriving (Show, Ord, Eq)
 
 getMem :: Memory -> String -> Maybe Data
-getMem [] _ = Nothing
 getMem (x:xs) key =
   case M.lookup key x of
     Nothing -> getMem xs key
     result  -> result
+getMem [] _ = Nothing
 
 getTopOpMap :: Memory -> String -> OpMap
 getTopOpMap (m:_) opname =
@@ -270,6 +278,14 @@ tok2typ mem t =
             Op _ _  -> Tany
             Val (Right val) -> val2typ val
             Val (Left  typ) -> typ
+    Wrd wrd ->
+      case getMem mem wrd of
+        Nothing  -> Tstr
+        Just dat ->
+          case dat of
+            Op _ _  -> Tany
+            Val (Right val) -> val2typ val
+            Val (Left  typ) -> typ
 
 -- (a) -> a repeatedly.
 collapse :: Token -> Token
@@ -285,7 +301,11 @@ tCollapse t =
 
 vCollapse :: Value -> Value
 vCollapse (Tup' [v]) = vCollapse v
-vCollapse v          = v
+vCollapse v =
+  case v of
+    Tup' vs   -> Tup'   (map vCollapse vs)
+    Arr' t vs -> Arr' t (map vCollapse vs)
+    _         -> v
 
 hasOp :: [Token] -> Bool
 hasOp [] = False

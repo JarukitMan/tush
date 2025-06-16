@@ -1,4 +1,7 @@
 FIX:
+- opr currently does not work.
+  ^ can't parse inputs
+- Allow for isolated operators. `(input)`
 - Capturing stdout while letting it print out naturally in `cap`.
 - Proper pipelining. Might have to pass handles around to also allow for background processes to be resumed.
 - ^ Currently, it outputs a string so when "," gets it, it thinks it's a command and passes it to the system.
@@ -6,6 +9,7 @@ FIX:
 - Implement a better way to check types. Currently can't check Tarr Tany or anything like that. This screws with BaseOp type-checking.
 
 TODO:
+- Test operators.
 - Add debug messages to the base operations.
 - Add help and time operators.
 - Map operations to names

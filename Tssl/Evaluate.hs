@@ -42,7 +42,11 @@ interpret b t mem (Expression _ opr left right) =
                         "Operator `" ++ opr ++ "` does not contain a variation that accepts type "
                         ++ show lefts ++ " and " ++ show rights
                       return Nothing
-                    Just (Base opfun _) -> opfun b t mem left right
+                    Just (Base opfun _) -> do
+                      bout <- opfun b t mem left right
+                      case bout of
+                        Nothing -> return Nothing
+                        Just (b', mem', v') -> return $ Just (b', mem', vCollapse v')
                     Just (Defined scopenum (names, optree) _) -> do
                       Just (b', mem', lefts') <- interpret b t mem left
                       Just (b'', mem'', rights') <- interpret b' t mem' right
@@ -59,10 +63,20 @@ interpret b t mem (Expression _ opr left right) =
                           case out of
                             Nothing -> return Nothing
                             -- Simple memory dropping. Might not work as intended.
-                            Just (nb, frontmem, result) -> return $ Just (nb, drop 1 frontmem ++ unused, result)
+                            Just (nb, frontmem, result) -> return $ Just (nb, drop 1 frontmem ++ unused, vCollapse result)
                         Nothing -> return Nothing
 interpret b _ mem (Operand x) =
   case x of
+    Wrd wrd ->
+      case getMem mem wrd of
+        Just dat ->
+          case dat of
+            Val (Right val) -> return $ Just (b, mem, val)
+            Val (Left  typ) -> do
+              putStrLn $ "Variable of type `" ++ show typ ++ "` does not have a value assigned to it."
+              return Nothing
+            Op r _ -> interpret b Tany mem (Expression r wrd (Operand $ Tup []) (Operand $ Tup []))
+        Nothing -> return $ Just (b, mem, Str' wrd)
     Var var ->
       case getMem mem var of
         Just dat ->
@@ -102,12 +116,12 @@ interpret b _ mem (Operand x) =
           putStrLn $ "Array `" ++ show x ++ "` cannot be evaluated."
           return Nothing
         Just (b', mem', arr') -> do
-          let arrtypes = map val2typ arr' 
+          let arrtypes = map val2typ (map vCollapse arr') 
           if dupes arrtypes
           then
             case headMaybe arrtypes of
-              Just typ -> return $ Just (b', mem', Arr' typ  arr')
-              Nothing  -> return $ Just (b', mem', Arr' Tany arr') 
+              Just typ -> return $ Just (b', mem', Arr' typ  (map vCollapse arr'))
+              Nothing  -> return $ Just (b', mem', Arr' Tany (map vCollapse arr')) 
           else do
             putStrLn $ "Array `" ++ show x ++ "`'s member types do not match."
             return Nothing
@@ -117,7 +131,7 @@ interpret b _ mem (Operand x) =
         Nothing   -> do
           putStrLn $ "Tuple `" ++ show x ++ "` cannot be evaluated."
           return Nothing
-        Just (b', mem', tup') -> return $ Just (b', mem', Tup' tup')
+        Just (b', mem', tup') -> return $ Just (b', mem', vCollapse $ Tup' tup')
     Fmt fmt   -> do
       fm <- handletup $ map (\a -> case a of {Left txt -> Tup [Str txt]; Right xpr -> xpr}) fmt
       case fm of
@@ -126,15 +140,15 @@ interpret b _ mem (Operand x) =
           return Nothing
         -- Just (mem', fmt') -> return $ Just (mem', Str' $ concat $ map show fmt')
         Just (b', mem', fmt') -> do
-          fmt'' <- argIO fmt'
-          return $ Just (b', mem', Str' $ concat $ fmt'')
+          fmt'' <- argIO (map vCollapse fmt')
+          return $ Just (b', mem', Str' $ concat $ (fmt''))
     where
       handletup :: [Token] -> IO (Maybe (Bool, Memory, [Value]))
       handletup xs =
           if hasOp xs
           then do
             -- DEBUG
-            putStrLn $ "handling " ++ show xs
+            putStrLn $ "handling " ++ show (Tup xs)
             -- tup <- ((interpret t $ newscope mem) . parse) xs
             tup <-
               case exp2typ mem (parse xs) of
@@ -149,8 +163,8 @@ interpret b _ mem (Operand x) =
               Nothing -> do
                 putStrLn $ "exp2typs failed to parse " ++ show xs ++ "."
                 return Nothing
-              Just (b', _, Tup' tup') -> return $ Just (b', mem, (map vCollapse tup'))
-              Just (b', _, val)       -> return $ Just (b', mem, [val])
+              Just (b', m', Tup' tup') -> return $ Just (b', drop 1 m', (map vCollapse tup'))
+              Just (b', m', val)       -> return $ Just (b', drop 1 m', [val])
           else do
             -- This looks like a mess!
             let
@@ -185,7 +199,7 @@ interpret b _ mem (Operand x) =
                           case out of
                             Nothing -> return Nothing
                             Just (gb', m', result) ->
-                              return $ Just (gb', m', (Right $ vCollapse result):ys)
+                              return $ Just (gb', drop 1 m', (Right $ vCollapse result):ys)
                         tok -> do
                           -- Just (_, result) <- ((interpret t $ newscope mem) . parse) [tok]
                           out <-
@@ -195,7 +209,7 @@ interpret b _ mem (Operand x) =
                           case out of
                             Nothing -> return Nothing
                             Just (gb', m', result) ->
-                              return $ Just (gb', m', Right result:ys)
+                              return $ Just (gb', drop 1 m', Right result:ys)
                 )
                 (return $ Just (b, mem, []))
                 xs

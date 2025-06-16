@@ -209,7 +209,7 @@ Base Operators:
       add 1 2 3
       echo "Hello, " + (add 1 2)
       ```
-      Note that there is a special variadic type (...) that consumes all input into a tuple.
+      Note that there is a special variadic type `Any` that consumes all input into a tuple.
       ```
       opr addall (...) nums = ( let acc = 0, for num in nums (if typ num == int || typ num == flt (acc = acc + num)), return acc)
       addall 1 2 3 4 5 #15

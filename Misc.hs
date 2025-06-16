@@ -25,6 +25,8 @@ intMaybe x = if isInt x then Just $ read x else Nothing
 blnMaybe :: String -> Maybe Bool
 blnMaybe x =
   case x of
+    "True" -> Just True
+    "False" -> Just False
     "true" -> Just True
     "false" -> Just False
     _ -> Nothing

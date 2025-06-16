@@ -57,7 +57,7 @@ mainLoop gbs mem = do
   line <- getLine
   if not $ "exit" == line then do
     -- putStrLn $ "\ESC[1;33m[DIR]\ESC[0m\n" ++ cwd
-    case tokenize initmem ('\n':line) of
+    case tokenize mem ('\n':line) of
     -- case tokenize initmem line of
       Right tokens -> do
         -- DEBUG
@@ -76,7 +76,7 @@ mainLoop gbs mem = do
             -- This means the real thing needs to get newlines too.
             -- cmd out
             case out of
-              Tup' [ ] -> return ()
+              Tup' [] -> return ()
               -- Makeshift solution for the leftover () after all the operations.
               _ -> putStrLn $ show out
             mainLoop nbs newmem
