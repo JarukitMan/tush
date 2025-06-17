@@ -5,6 +5,7 @@ import Tssl.Parse
 import System.Directory
 import qualified Data.Map as M
 import Misc
+import Data.Maybe
 -- import System.Directory
 -- import System.IO
 
@@ -26,17 +27,20 @@ interpret b t mem (Expression _ opr left right) =
           putStrLn "Evaluation Error: Literal found at non-bottom level."
           return Nothing
         Op _ opmap -> do
-          case exp2typ mem left of
-            Nothing -> do
-              putStrLn $ "Can't infer the type of operation `" ++ opr ++ "`'s left-hand side at `" ++ show left ++ show opr ++ show right ++ "`."
-              return Nothing
-            Just lefts ->
-              case exp2typ mem right of
-                Nothing -> do
-                  putStrLn $ "Can't infer the type of operation `" ++ opr ++ "`'s right-hand side at `" ++ show left ++ show opr ++ show right ++ "`."
-                  return Nothing
-                Just rights ->
-                  case (lefts, rights) `lookupOp` opmap of
+          -- case exp2typ mem left of
+          --   Nothing -> do
+          --     putStrLn $ "Can't infer the type of operation `" ++ opr ++ "`'s left-hand side at `" ++ show left ++ show opr ++ show right ++ "`."
+          --     return Nothing
+          --   Just lefts ->
+          --     case exp2typ mem right of
+          --       Nothing -> do
+          --         putStrLn $ "Can't infer the type of operation `" ++ opr ++ "`'s right-hand side at `" ++ show left ++ show opr ++ show right ++ "`."
+          --         return Nothing
+          --       Just rights ->
+                  let
+                    lefts = fromMaybe Tany (exp2typ mem left)
+                    rights = fromMaybe Tany (exp2typ mem right)
+                  case (tCollapse lefts, tCollapse rights) `lookupOp` opmap of
                     Nothing -> do
                       putStrLn $
                         "Operator `" ++ opr ++ "` does not contain a variation that accepts type "
@@ -148,20 +152,20 @@ interpret b _ mem (Operand x) =
           if hasOp xs
           then do
             -- DEBUG
-            putStrLn $ "handling " ++ show (Tup xs)
+            -- putStrLn $ "handling " ++ show (Tup xs)
             -- tup <- ((interpret t $ newscope mem) . parse) xs
             tup <-
               case exp2typ mem (parse xs) of
                 Nothing -> do
-                  putStrLn $ "exp2typs failed to parse " ++ show xs ++ ". (before interpreting.)"
+                  putStrLn $ "exp2typ failed to parse " ++ show xs ++ ". (before interpreting.)"
                   return Nothing
                 Just typ -> do
                   -- DEBUG
-                  putStrLn $ "Output type is: " ++ show typ
+                  -- putStrLn $ "Output type is: " ++ show typ
                   ((interpret b typ $ newscope mem) . parse) xs
             case tup of
               Nothing -> do
-                putStrLn $ "exp2typs failed to parse " ++ show xs ++ "."
+                putStrLn $ "exp2typ failed to parse " ++ show xs ++ "."
                 return Nothing
               Just (b', m', Tup' tup') -> return $ Just (b', drop 1 m', (map vCollapse tup'))
               Just (b', m', val)       -> return $ Just (b', drop 1 m', [val])
@@ -193,7 +197,7 @@ interpret b _ mem (Operand x) =
                           out <-
                             case exp2typ m (parse tup) of
                               Nothing -> do
-                                putStrLn $ "exp2typs failed to parse " ++ show xs ++ ". (Nested)"
+                                putStrLn $ "exp2typ failed to parse " ++ show xs ++ ". (Nested)"
                                 return Nothing
                               Just typ -> ((interpret gb typ $ newscope m) . parse) tup
                           case out of
@@ -248,7 +252,7 @@ exp2typ mem (Operand x) =
       if hasOp tup
       then exp2typ mem (parse tup)
       else Just $ tCollapse $ Ttup $ map (tok2typ mem) tup
-    -- Might want to do better...
+    -- TODO: Be better
     Arr arr ->
       if hasOp arr
       then
@@ -258,7 +262,8 @@ exp2typ mem (Operand x) =
           Just h            -> Just $ Tarr $ tCollapse h
       else
         case headMaybe $ map (tok2typ mem) arr of
-          Nothing -> Nothing
+          -- Nothing -> Nothing
+          Nothing -> Just $ Tarr Tany
           Just h  -> Just $ Tarr $ tCollapse h
     tok -> Just $ tCollapse (tok2typ mem tok)
 exp2typ mem ex@(Expression _ op left right) =
@@ -272,8 +277,8 @@ exp2typ mem ex@(Expression _ op left right) =
         Op _ opmap -> do
           l <- exp2typ mem left
           r <- exp2typ mem right
-          opr <- (tCollapse l, tCollapse r) `lookupOp` opmap
-          case opr of
+          o <- (tCollapse l, tCollapse r) `lookupOp` opmap
+          case o of
             Base _ t -> Just $ tCollapse t
             Defined _ _ t -> Just $ tCollapse t
 

@@ -106,8 +106,24 @@ instance Show Value where
 -- Added a "break" type for sending the break signal to the for/while loop controller.
 data Type =
   Tint | Tflt | Tchr | Tstr | Ttyp | Tbln | Tpth |
-  Tarr Type | Ttup [Type] | Tnon | Tany | Tbrk
-  deriving (Show, Ord, Eq)
+  Tarr Type | Ttup [Type] | Tany | Tbrk
+  deriving (Ord, Eq)
+
+instance Show Type where
+  show :: Type -> String
+  show typ =
+    case typ of
+      Tint -> "Int"
+      Tflt -> "Flt"
+      Tchr -> "Chr"
+      Tstr -> "Str"
+      Ttyp -> "Typ"
+      Tbln -> "Bln"
+      Tpth -> "Pth"
+      Tany -> "Any"
+      Tbrk -> "Brk"
+      Tarr t -> "[" ++ show t ++ "]"
+      Ttup t -> "(" ++ intercalate " " (map show t) ++ ")"
 
 hasTany :: Type -> Bool
 hasTany typ =
@@ -190,38 +206,40 @@ instance Show Operator where
 
 insertOp :: (Type, Type) -> Operator -> OpMap -> OpMap
 insertOp (left, right) op (lmap, lany) =
-  if left == Tany
+  if hasTany left
   then
     case lany of
-      Just (rmap, rany) -> (lmap, Just $ insertRight rmap rany)
-      Nothing -> (lmap, Just $ insertRight M.empty Nothing)
-        -- if right == Tany
-        -- then (lmap, Just (M.empty, Just op))
-        -- else (lmap, Just (M.singleton right op, Nothing))
+      Just rside -> (lmap, Just $ insertRight rside)
+      Nothing -> (lmap, Just $ insertRight (M.empty, Nothing))
   else
     case left `M.lookup` lmap of
-      Just (rmap, rany) -> (M.insert left (insertRight rmap rany) lmap, lany)
-      Nothing -> (M.insert left (insertRight M.empty Nothing) lmap, lany)
+      Just rside -> (M.insert left (insertRight rside) lmap, lany)
+      Nothing -> (M.insert left (insertRight (M.empty, Nothing)) lmap, lany)
   where
-    insertRight rmap rany =
-      if right == Tany
+    insertRight (rmap, rany) =
+      if hasTany right
       then (rmap, Just op)
       else (M.insert right op rmap, rany)
 
 lookupOp :: (Type, Type) -> OpMap -> Maybe Operator
 lookupOp (left, right) (lmap, lany) =
-  let
+  case left `M.lookup` lmap of
+    Nothing ->
+      case lany of
+        Nothing -> Nothing
+        Just rside -> lookupR rside
+    Just rside -> lookupR rside
+  where
     lookupR (rmap, rany) =
       case right `M.lookup` rmap of
         Just op -> Just op
-        Nothing -> rany
-  in
-    case left `M.lookup` lmap of
-      Nothing ->
-        case lany of
-          Nothing -> Nothing
-          Just rside -> lookupR rside
-      Just rside -> lookupR rside
+        Nothing ->
+          case lany of
+            Nothing -> rany
+            Just (lamap, anyany) ->
+              case right `M.lookup` lamap of
+                Nothing -> anyany
+                Just op -> Just op
 
 -- Error-checking should be done by the interpreter. This tree allows for variables.
 data Expression = Expression Word8 String Expression Expression | Operand Token
@@ -298,6 +316,13 @@ tCollapse t =
     Ttup [t'] -> tCollapse t'
     Ttup t'   -> Ttup $ map tCollapse t' 
     _         -> t
+
+vtCollapse :: VarTree -> VarTree
+vtCollapse vt =
+  case vt of
+    VarGroup [vn] -> vtCollapse vn
+    VarGroup  vs  -> VarGroup (map vtCollapse vs)
+    VarName   vn  -> VarName vn
 
 vCollapse :: Value -> Value
 vCollapse (Tup' [v]) = vCollapse v

@@ -47,6 +47,8 @@ add gbs etp mem lhs rhs = do
                 (Chr' a, Chr' b)       -> Chr' $ C.chr $ (C.ord a) + (C.ord b)
                 (Bln' a, Bln' b)       -> Bln' $ a || b
                 (Pth' a, Str' b)       -> Pth' $ a ++ ('/':b)
+                (Str' a, Chr' b)       -> Str' $ a ++ [b]
+                (Chr' a, Str' b)       -> Str' $ a:b
                 (Str' a, b)            -> Str' $ a ++ show b
                 (a, Str' b)            -> Str' $ (show a) ++ b
                 (Arr' t1 a, Arr' t2 b) ->
@@ -1254,8 +1256,17 @@ str gbs _ mem lhs rhs = do
         Nothing -> return Nothing
         Just (rbs, mr, r) ->
           case l of
-            Tup' [] -> return $ Just (rbs, mr, Str' $ show $ vCollapse r)
+            Tup' [] ->
+              case r of
+                Arr' Tchr cs -> return $ Just (rbs, mr, Str' (chr2str cs))
+                _ -> return $ Just (rbs, mr, Str' $ show $ vCollapse r)
             _       -> return Nothing
+    where
+      chr2str [] = []
+      chr2str (v:vs) =
+        case v of
+          Chr' c -> c:chr2str vs
+          _      -> []
 
 pth :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
 pth gbs _ mem lhs rhs = do
@@ -1632,6 +1643,7 @@ asn gbs _ mem lhs rhs= do
               Nothing -> Nothing
               Just t ->
                 case tok2pair ts of
+                  -- The first variation could be Ttup (Ttup Tany:[]), but the second one can't.
                   Just (VarGroup vg, Ttup tp) -> Just (VarGroup (VarName v:vg), Ttup (t:tp))
                   Just (VarName vn, tp) -> Just (VarGroup [VarName v, VarName vn], Ttup [t, tp])
                   -- Can't have a vargroup associate with only one non-tuple type, that's illegal.
@@ -1639,12 +1651,15 @@ asn gbs _ mem lhs rhs= do
           tok2pair (Tup tup:ts) =
             case tok2pair tup of
               Nothing -> Nothing
-              Just (vt, ty) ->
+              Just (vt, t) ->
                 case tok2pair ts of
-                  Just (VarGroup vg, Ttup tp) -> Just (VarGroup (vt:vg), Ttup (ty:tp))
-                  Just (VarName vn, tp) -> Just (VarGroup [vt, VarName vn], Ttup [ty, tp])
+                  -- This changes (a (b c)) -> (a b c)
+                  -- The first variation could be Ttup (Ttup Tany:[]), but the second one can't.
+                  Just (VarGroup vg, Ttup tp) -> Just (VarGroup (vt:vg), Ttup (t:tp))
+                  Just (VarName vn, tp) -> Just (VarGroup [vt, VarName vn], Ttup [t, tp])
                   -- Can't have a vargroup associate with only one non-tuple type, that's illegal.
                   _ -> Nothing
+          tok2pair [] = Just (VarGroup [], Ttup [])
           tok2pair _ = Nothing
           zipName :: VarTree -> Type -> [(String, Data)]
           zipName vt t =
@@ -1689,7 +1704,9 @@ asn gbs _ mem lhs rhs= do
                       mem,
                       Tup' []
                     )
-              _ -> return Nothing
+              _ -> do
+                putStrLn $ "Operator named `" ++ opname ++ "` does not exist, but is marked as an operator by the tokenizer."
+                return Nothing
           Operand (Wrd opname) ->
             case exp2typ mem rhs of
               Nothing -> do
@@ -1758,7 +1775,7 @@ asn gbs _ mem lhs rhs= do
                     case getMem mem s of
                       -- do not insert duplicate operator data
                       Nothing ->
-                        case exp2typ (M.fromList (zipName (VarGroup [ln, rn]) (Ttup [lt, rt])):mem) rhs of
+                        case exp2typ (M.fromList (zipName (vtCollapse $ VarGroup [ln, rn]) (tCollapse $ Ttup [lt, rt])):mem) rhs of
                           Nothing -> do
                             putStrLn $ "Can't derive the type of the defined operator `" ++ show (Tup ts) ++ "`."
                             return Nothing
@@ -1801,8 +1818,10 @@ asn gbs _ mem lhs rhs= do
                     case getMem mem s of
                       -- do not insert duplicate operator data
                       Just (Op rank _) ->
-                        case exp2typ (M.fromList (zipName (VarGroup [ln, rn]) (Ttup [lt, rt])):mem) rhs of
-                          Nothing -> return Nothing
+                        case exp2typ (M.fromList (zipName (vtCollapse $ VarGroup [ln, rn]) (tCollapse $ Ttup [lt, rt])):mem) rhs of
+                          Nothing -> do
+                            putStrLn $ "Can't derive the output type of the operator `" ++ s ++ "` being defined."
+                            return Nothing
                           Just t ->
                             return $ Just
                             (
@@ -1812,11 +1831,11 @@ asn gbs _ mem lhs rhs= do
                               (
                                 Op rank
                                 (insertOp
-                                  (Ttup [], Ttup [])
+                                  (lt, rt)
                                   (
                                     Defined
                                     rank
-                                    (VarGroup [], rhs)
+                                    (VarGroup [ln, rn], rhs)
                                     t
                                   )
                                   (getTopOpMap mem s)
@@ -1826,8 +1845,10 @@ asn gbs _ mem lhs rhs= do
                               Tup' []
                             )
                       Nothing ->
-                        case exp2typ (M.fromList (zipName (VarGroup [ln, rn]) (Ttup [lt, rt])):mem) rhs of
-                          Nothing -> return Nothing
+                        case exp2typ (M.fromList (zipName (vtCollapse $ VarGroup [ln, rn]) (tCollapse $ Ttup [lt, rt])):mem) rhs of
+                          Nothing -> do
+                            putStrLn $ "Can't derive the output type of the operator `" ++ s ++ "` being defined."
+                            return Nothing
                           Just t ->
                             return $ Just
                             (
@@ -1856,13 +1877,20 @@ asn gbs _ mem lhs rhs= do
                   _ ->
                     (putStrLn $ "Can't parse operator names/types in declaration `" ++ show ts ++ "`.") >>=
                     \_ -> return  Nothing
+          expr@(Expression _ _ _ _)  ->
+            asn gbs Tany mem (Expression 4 "opr" (Operand $ Tup []) (Operand $ Tup $ flatten expr)) rhs
+            where
+              flatten (Operand o) = [o]
+              flatten (Expression p o l r) = (flatten l ++ Opr p o:flatten r)
           _ ->
             (putStrLn $ "Operator construction can't be parsed.") >>=
             \_ -> return Nothing
       else
         putStrLn "Opr statement's left-hand side is not empty." >>=
         \_ -> return Nothing
-    _ -> return Nothing
+    _ -> do
+      putStrLn "Bad syntax on `=` operator."
+      return Nothing
 
 -- Unsure if I should use cap or cmd here. I used cap so it would be able to be used like $()
 exe :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))

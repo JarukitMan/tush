@@ -22,10 +22,10 @@ bunch [] = []
 -- Inserts Nones where there are two consecutive operators. Helps to make the tree not need to check.
 bunch (op1@(Opr _ _):op2@(Opr _ _):xs) = op1:Tup []:(bunch $ op2:xs)
 bunch (op@(Opr _ _):xs) = op:bunch xs
-bunch xs = collapse front:bunch rest
+bunch xs = front:bunch rest
   where
     (x, rest) = splitWith (\t -> case t of {Opr _ _ -> True; _ -> False}) xs
-    front = Tup $ map (\t -> case t of {Tup ys -> collapse $ Tup (bunch ys); y -> y}) x
+    front = collapse $ Tup $ map (\t -> case t of {Tup [Opr r o] -> Tup [Tup [], Opr r o, Tup []]; Tup ys -> collapse $ Tup (bunch ys); y -> y}) x
 
 -- the input is always at the right, so if it's of equal rank,
 -- it is done left to right. So equal would be equivalent to the right being of less rank.

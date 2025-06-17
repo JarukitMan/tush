@@ -1,18 +1,9 @@
 FIX:
-- opr currently does not work.
-  ^ can't parse inputs
-- Allow for isolated operators. `(input)`
-- Capturing stdout while letting it print out naturally in `cap`.
-- Proper pipelining. Might have to pass handles around to also allow for background processes to be resumed.
-- ^ Currently, it outputs a string so when "," gets it, it thinks it's a command and passes it to the system.
--   ^ The current temporay solution is to only pass operands to the system in "," and not expressions.
-- Implement a better way to check types. Currently can't check Tarr Tany or anything like that. This screws with BaseOp type-checking.
 
 TODO:
 - Test operators.
 - Add debug messages to the base operations.
 - Add help and time operators.
-- Map operations to names
 - Implement Grr.
 - Implement Imp.
 - Implement Tsf.
@@ -23,6 +14,7 @@ Front part:
 - Translate markdown (and colors) to ansi in strings.
 - Include a wrapper for other interactive shells.
 - Scratch paper.
+- Seperate buffer for outputs, allowing for navigating and yanking the outputs.
 Lang part:
 - Make "," follow spec.
 - Rust style enum and match, which implies switch case.
@@ -34,6 +26,8 @@ Lang part:
 - Real generic support.
 - Seperate IO operations and non-IO operations. This will allow for better handling of both.
 - Make a "Hare" variant. A lazy, probably faster version.
+- Proper process handling and pipelining. Might pass process handles around.
+- Capturing stdout while letting it print out naturally in `cap`.
 
 NOTES:
 Currently, pipe is just eval left and pass it to system and feed out to right process.

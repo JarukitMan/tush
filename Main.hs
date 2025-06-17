@@ -93,9 +93,9 @@ tempprompt :: IO String
 tempprompt = do
   cwd <- getCurrentDirectory
   case headMaybe (reverse $ pieces (== '/') cwd) of
-    Nothing -> return $ '<':'|':("'w'|\ESC[33m*\ESC[0m> ")
-    Just "" -> return $ '<':'|':("'w'|\ESC[33m*\ESC[0m> ")
-    Just path -> return $ '<':'|':(path ++ "|\ESC[33m*\ESC[0m> ")
+    Nothing -> return $ "\ESC[0m<|'w'|\ESC[33m*\ESC[0m> "
+    Just "" -> return $ "\ESC[0m<|'w'|\ESC[33m*\ESC[0m> "
+    Just path -> return $ "\ESC[0m<|" ++ path ++ "|\ESC[33m*\ESC[0m> "
 
 initmem :: Memory
 initmem =
@@ -305,8 +305,8 @@ initmem =
             insertOp (Tpth, Tstr) (Base add (Tpth)) $
             insertOp (Tstr, Tany) (Base add (Tstr)) $
             insertOp (Tany, Tstr) (Base add (Tstr)) $
-            insertOp (Tarr Tany, Tarr Tany) (Base add (Tarr Tany)) $
-            insertOp (Tarr Tany, Tany) (Base add (Tarr Tany)) $
+            -- insertOp (Tarr Tany, Tarr Tany) (Base add (Tarr Tany)) $
+            -- insertOp (Tarr Tany, Tany) (Base add (Tarr Tany)) $
             insertOp (Tpth, Tint) (Base add (Tpth)) $
             insertOp (Tany, Tany) (Base add (Tany))
             (empty, Nothing)
