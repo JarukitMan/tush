@@ -16,11 +16,23 @@ dupes [_] = True
 dupes (x1:x2:xs) = x1 == x2 && dupes (x2:xs)
 
 isInt :: String -> Bool
-isInt [] = True
-isInt (x:xs) = if x `elem` ['0'..'9'] then isInt xs else False
+isInt [] = False
+isInt (x:xs) =
+  if x `elem` ('-':['0'..'9'])
+  then and (map (`elem` ['0'..'9']) xs)
+  else False
 
 intMaybe :: String -> Maybe Integer
 intMaybe x = if isInt x then Just $ read x else Nothing
+
+-- If this fails I'll be really mad.
+fltMaybe :: String -> Maybe Double
+fltMaybe [] = Nothing
+fltMaybe num =
+  if isInt front && not (null $ drop 1 back) && and (map (`elem` ['0'..'9']) (drop 1 back))
+  then Just $ read num
+  else Nothing
+  where (front, back) = splitWith (== '.') num
 
 blnMaybe :: String -> Maybe Bool
 blnMaybe x =

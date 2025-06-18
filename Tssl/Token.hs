@@ -89,7 +89,17 @@ chunkify list@(x:xs)
   otherwise = do
     let (front, back) = splitEsc (`elem` " \t\r\n,{}()[].\"|") list
     (rest, unchunked) <- chunkify back
-    Right $ (Word front:rest, unchunked)
+    -- I'll just check for floats here screw it.
+    if isInt front
+    then
+      case rest of
+        (Word ".":Word next:rest') ->
+          if isInt next
+          then Right $ (Word (front ++ '.':next):rest', unchunked)
+          else Right $ (Word front:rest, unchunked)
+        _ -> Right $ (Word front:rest, unchunked)
+    else
+      Right $ (Word front:rest, unchunked)
 chunkify [] = Right ([], [])
 
 fmtChunk :: String -> Either String ([Chunk], String)
@@ -138,9 +148,12 @@ checkWord memory x =
                   case intMaybe x' of
                     Just int -> Int int
                     Nothing  ->
-                      case pthMaybe x' of
-                        Just pth -> Pth pth
-                        Nothing  -> Wrd x'
+                      case fltMaybe x' of
+                        Just flt -> Flt flt
+                        Nothing ->
+                          case pthMaybe x' of
+                            Just pth -> Pth pth
+                            Nothing  -> Wrd x'
     tok2fmt x' =
       case x' of
         Str s -> Left  s

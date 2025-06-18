@@ -98,6 +98,8 @@ sub gbs etp mem lhs rhs = do
           let
             subv x y =
               case (x, y) of
+                (Tup' [], Int' b)      -> Just $ Int' $ -b
+                (Tup' [], Flt' b)      -> Just $ Flt' $ -b
                 (Int' a, Int' b)       -> Just $ Int' $ a - b
                 (Int' a, Flt' b)       -> Just $ Flt' $ (fromInteger a) - b
                 (Flt' a, Int' b)       -> Just $ Flt' $ a - (fromInteger b)
@@ -849,6 +851,8 @@ range gbs _ mem lhs rhs = do
         Just (rbs, mr, r) ->
           case (l, r) of
             (Int' a, Int' b) -> return $ Just (rbs, mr, Arr' Tint $ map (Int') [a..b])
+            (Int' a, Flt' b) -> return $ Just (rbs, mr, Arr' Tint $ map (Flt') [fromInteger a..b])
+            (Flt' a, Int' b) -> return $ Just (rbs, mr, Arr' Tint $ map (Flt') [a..fromInteger b])
             (Flt' a, Flt' b) -> return $ Just (rbs, mr, Arr' Tflt $ map (Flt') [a..b])
             (Tup' [Int' a, Int' d], Int' b) -> return $ Just (rbs, mr, Arr' Tint $ map (Int') [a,d..b])
             -- This is like, really bad for accuracy but whatever...

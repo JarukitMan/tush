@@ -48,7 +48,7 @@ data Data = Op Word8 OpMap | Val (Either Type Value)
 type OpMap = (M.Map Type (M.Map Type Operator, Maybe Operator), Maybe (M.Map Type Operator, Maybe Operator))
 
 data Token =
-  Wrd String | Var String | Opr Word8 String | Str String | Pth String | Int Integer | Chr Char | Bln Bool | Typ Type |
+  Wrd String | Var String | Opr Word8 String | Str String | Pth String | Int Integer | Flt Double | Chr Char | Bln Bool | Typ Type |
   Tup [Token] | Arr [Token] | Fmt [Either String Token]
   deriving (Eq, Ord)
 
@@ -62,6 +62,7 @@ instance Show Token where
       Str   str -> "\ESC[32m\""  ++ str                            ++ "\"\ESC[0m"
       Pth   pth -> "\ESC[33m"    ++ pth                            ++ "\ESC[0m"
       Int   int -> "\ESC[34m"    ++ show int                       ++ "\ESC[0m"
+      Flt   flt -> "\ESC[34m"    ++ show flt                       ++ "\ESC[0m"
       Chr   chr -> "\ESC[35m'"   ++ chr                            :  "'\ESC[0m"
       Bln   bln -> "\ESC[36m"    ++ show bln                       ++ "\ESC[0m"
       Typ   typ -> "\ESC[37m"    ++ show typ                       ++ "\ESC[0m"
@@ -279,6 +280,7 @@ tok2typ mem t =
     Str _   -> Tstr
     Pth _   -> Tpth
     Int _   -> Tint
+    Flt _   -> Tflt
     Chr _   -> Tchr
     Bln _   -> Tbln
     Typ _   -> Ttyp

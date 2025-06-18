@@ -28,6 +28,7 @@ Lang part:
 - Make a "Hare" variant. A lazy, probably faster version.
 - Proper process handling and pipelining. Might pass process handles around.
 - Capturing stdout while letting it print out naturally in `cap`.
+- The more I develop the more I want a type that's a tree all the way down for expressions.
 
 NOTES:
 Currently, pipe is just eval left and pass it to system and feed out to right process.

@@ -276,6 +276,8 @@ initmem =
         ("..", Op 11
           (
             insertOp (Tint, Tint) (Base range (Tarr Tint)) $
+            insertOp (Tint, Tflt) (Base range (Tarr Tflt)) $
+            insertOp (Tflt, Tint) (Base range (Tarr Tflt)) $
             insertOp (Tflt, Tflt) (Base range (Tarr Tflt)) $
             insertOp (Ttup [Tint, Tint], Tint) (Base range (Tarr Tflt)) $
             insertOp (Ttup [Tflt, Tint], Tint) (Base range (Tarr Tflt)) $
@@ -316,6 +318,8 @@ initmem =
           (
             insertOp (Tint, Tint) (Base sub (Tint)) $
             insertOp (Tint, Tflt) (Base sub (Tflt)) $
+            insertOp (Ttup [], Tint) (Base sub (Tint)) $
+            insertOp (Ttup [], Tflt) (Base sub (Tflt)) $
             insertOp (Tflt, Tint) (Base sub (Tflt)) $
             insertOp (Tflt, Tflt) (Base sub (Tflt)) $
             insertOp (Tint, Tchr) (Base sub (Tint)) $

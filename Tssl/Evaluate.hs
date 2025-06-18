@@ -99,6 +99,7 @@ interpret b _ mem (Operand x) =
       putStrLn  $ "Evaluation Error: Operand `" ++ opr ++ "`found at bottom level."
       return Nothing
     Int int -> return $ Just (b, mem, Int' int)
+    Flt flt -> return $ Just (b, mem, Flt' flt)
     Chr chr -> return $ Just (b, mem, Chr' chr)
     Str str -> return $ Just (b, mem, Str' str)
     Bln bln -> return $ Just (b, mem, Bln' bln)
@@ -251,7 +252,21 @@ exp2typ mem (Operand x) =
     Tup tup ->
       if hasOp tup
       then exp2typ mem (parse tup)
-      else Just $ tCollapse $ Ttup $ map (tok2typ mem) tup
+      -- else Just $ tCollapse $ Ttup $ map (tok2typ mem) tup
+      else
+        case
+          sequence $ map
+          (
+            \tok ->
+              case tok of
+                Tup ts -> exp2typ mem (Operand (Tup ts))
+                Arr ts -> exp2typ mem (Operand (Arr ts))
+                _      -> Just (tok2typ mem tok)
+          )
+          tup
+        of
+          Just ts -> Just $ tCollapse (Ttup ts)
+          Nothing -> Nothing
     -- TODO: Be better
     Arr arr ->
       if hasOp arr
