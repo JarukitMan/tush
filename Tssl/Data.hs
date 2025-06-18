@@ -386,6 +386,7 @@ argIO vals =
             case out of
               Nothing -> return []
               Just txt -> return (words txt)
+          Tup' [] -> return []
           _        -> return [show v]
     )
     vals

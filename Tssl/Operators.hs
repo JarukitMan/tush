@@ -1304,7 +1304,7 @@ ift gbs etp mem lhs rhs =
               then interpret True etp ml (Operand expression)
               else do
                 -- DEBUG
-                putStrLn $ show l
+                -- putStrLn $ show l
                 return $ Just (False, ml, Tup' [])
         _                          -> return Nothing
     _                -> do
@@ -1569,7 +1569,7 @@ asn gbs _ mem lhs rhs= do
                   if t == val2typ r
                   then do
                     -- DEBUG
-                    putStrLn $ show $ map (M.filter (\d -> case d of {Op _ _ -> False; Val _ -> True;})) (updateVar vname r mr)
+                    -- putStrLn $ show $ map (M.filter (\d -> case d of {Op _ _ -> False; Val _ -> True;})) (updateVar vname r mr)
                     return $ Just (rbs, updateVar vname r mr, Tup' [])
                   else do
                     putStrLn $ "Can't assign a value of type `" ++ show (val2typ r) ++ "` to variable `" ++ vname ++ "` of type `" ++  show t ++ "`"
@@ -1578,7 +1578,7 @@ asn gbs _ mem lhs rhs= do
                   if val2typ x == val2typ r
                   then do
                     -- DEBUG
-                    putStrLn $ show $ map (M.filter (\d -> case d of {Op _ _ -> False; Val _ -> True;})) (updateVar vname r mr)
+                    -- putStrLn $ show $ map (M.filter (\d -> case d of {Op _ _ -> False; Val _ -> True;})) (updateVar vname r mr)
                     return $ Just (rbs, updateVar vname r mr, Tup' [])
                   else do
                     putStrLn $ "Can't assign a value of type `" ++ show (val2typ r) ++ "` to variable `" ++ vname ++ "` of type `" ++ show (val2typ x) ++ "`"
@@ -1612,10 +1612,15 @@ asn gbs _ mem lhs rhs= do
           typish tok = if compoundType tok == Nothing then False else True
           -- This one doesn't check for invalid things yet. (stuff that aren't types or names)
           splitOp :: [Token] -> Maybe ([Token], String, [Token])
-          splitOp (Wrd left:Wrd opname:right) = Just ([Wrd left], opname, right)
-          splitOp (Var left:Wrd opname:right) = Just ([Wrd left], opname, right)
+          -- splitOp (Wrd left:Wrd opname:right) = Just ([Wrd left], opname, right)
+          -- splitOp (Var left:Wrd opname:right) = Just ([Wrd left], opname, right)
+          splitOp (Wrd opname:right) = Just ([], opname, right)
           splitOp (Opr _ opname:right) = Just ([], opname, right)
-          splitOp [] = Nothing
+          splitOp (Typ x1:Wrd x2:xs) =
+            case splitOp xs of
+              Nothing -> Nothing
+              Just (l, s, r) -> Just (Typ x1:Wrd x2:l, s, r)
+          -- splitOp [] = Nothing
           splitOp (Tup x1:Wrd x2:xs) =
             if typish (Tup x1)
             then
@@ -1632,10 +1637,12 @@ asn gbs _ mem lhs rhs= do
                 Just (l, s, r) -> Just (Tup x1:Wrd x2:l, s, r)
             else
               Nothing
-          splitOp (x:xs) =
-            case splitOp xs of
-              Nothing -> Nothing
-              Just (l, s, r) -> Just (x:l, s, r)
+          -- splitOp (x:xs) =
+          --   case splitOp xs of
+          --     Nothing -> Nothing
+          --     Just (l, s, r) -> Just (x:l, s, r)
+          splitOp (x1:Var x2:xs) = splitOp (x1:Wrd x2:xs)
+          splitOp _ = Nothing
           tok2pair :: [Token] -> Maybe (VarTree, Type)
           tok2pair (tok:Var v:ts) = tok2pair (tok:Wrd v:ts)
           tok2pair (tok:Wrd v:ts) =
@@ -1882,7 +1889,12 @@ asn gbs _ mem lhs rhs= do
             asn gbs Tany mem (Expression 4 "opr" (Operand $ Tup []) (Operand $ Tup $ flatten expr)) rhs
             where
               flatten (Operand o) = [o]
-              flatten (Expression p o l r) = (flatten l ++ Opr p o:flatten r)
+              flatten (Expression p o l r) =
+                case (l, r) of
+                  ((Operand (Tup [])), (Operand (Tup []))) -> [Opr p o]
+                  (_, (Operand (Tup []))) -> flatten l ++ [Opr p o]
+                  ((Operand (Tup [])), _) -> Opr p o:flatten r
+                  _ -> flatten l ++ Opr p o:flatten r
           _ ->
             (putStrLn $ "Operator construction can't be parsed.") >>=
             \_ -> return Nothing
