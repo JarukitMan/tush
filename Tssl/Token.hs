@@ -52,7 +52,17 @@ chunkify list@(x:xs)
   |
   x == '.' = do
     (rest, unchunked) <- chunkify xs
-    Right (Word ".":rest, unchunked)
+    -- Put the float-checking thing here too, because the clause below breaks nested accessor.
+    case rest of
+      (Word w:ws) ->
+        if isFlt w
+        then
+          let (front, back) = splitEsc (== '.') w
+                                                        -- drop the dot
+          in  Right (Word ".":Word front:Word ".":Word (drop 1 back):ws, unchunked)
+        else
+          Right (Word ".":rest, unchunked)
+      _ -> Right (Word ".":rest, unchunked)
   |
   x == '|' = do
     (rest, unchunked) <- chunkify xs

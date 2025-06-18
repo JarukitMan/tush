@@ -25,14 +25,17 @@ isInt (x:xs) =
 intMaybe :: String -> Maybe Integer
 intMaybe x = if isInt x then Just $ read x else Nothing
 
+isFlt :: String -> Bool
+isFlt num = isInt front && not (null $ drop 1 back) && and (map (`elem` ['0'..'9']) (drop 1 back))
+  where (front, back) = splitWith (== '.') num
+
 -- If this fails I'll be really mad.
 fltMaybe :: String -> Maybe Double
 fltMaybe [] = Nothing
 fltMaybe num =
-  if isInt front && not (null $ drop 1 back) && and (map (`elem` ['0'..'9']) (drop 1 back))
+  if isFlt num
   then Just $ read num
   else Nothing
-  where (front, back) = splitWith (== '.') num
 
 blnMaybe :: String -> Maybe Bool
 blnMaybe x =
