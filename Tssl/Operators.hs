@@ -1541,9 +1541,10 @@ var gbs etp mem lhs rhs =
   else (putStrLn "Let statement's left-hand side is not empty.") >>= \_ -> return Nothing
 
 opr :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
-opr _ _ _ _ _ =
+opr _ _ mem _ _ =
   putStrLn "The current implementation of Turtle Shell Scripting Language does not allow for operation declaration without definition yet." >>=
-  (\_ -> return Nothing)
+  \_ -> putStrLn (show (map (M.filter (\x -> case x of Op _ _ -> True ; _ -> False)) mem)) >>=
+  \_ -> return Nothing
 
 -- Eval right, then check left if it needs evaluation, if it doesn't then check type of left, then assign (or not).
 -- Maybe I'll add support for pattern matching here later.
@@ -1694,7 +1695,7 @@ asn gbs _ mem lhs rhs= do
                           (Ttup [], Ttup [])
                           (
                             Defined
-                            rank
+                            (fromIntegral $ length mem)
                             (VarGroup [], rhs)
                             t
                           )
@@ -1724,7 +1725,7 @@ asn gbs _ mem lhs rhs= do
                       (Ttup [], Ttup [])
                       (
                         Defined
-                        17
+                        (fromIntegral $ length mem)
                         (VarGroup [], rhs)
                         t
                       )
@@ -1751,7 +1752,7 @@ asn gbs _ mem lhs rhs= do
                       (Ttup [], Ttup [])
                       (
                         Defined
-                        (fromInteger rank)
+                        (fromIntegral $ length mem)
                         (VarGroup [], rhs)
                         t
                       )
@@ -1788,11 +1789,11 @@ asn gbs _ mem lhs rhs= do
                               (
                                 Op (fromInteger rank)
                                 (insertOp
-                                  (lt, rt)
+                                  (tCollapse lt, tCollapse rt)
                                   (
                                     Defined
-                                    (fromInteger rank)
-                                    (VarGroup [ln, rn], rhs)
+                                    (fromIntegral $ length mem)
+                                    (vtCollapse $ VarGroup [ln, rn], rhs)
                                     t
                                   )
                                   (M.empty, Nothing)
@@ -1831,11 +1832,11 @@ asn gbs _ mem lhs rhs= do
                               (
                                 Op rank
                                 (insertOp
-                                  (lt, rt)
+                                  (tCollapse lt, tCollapse rt)
                                   (
                                     Defined
-                                    rank
-                                    (VarGroup [ln, rn], rhs)
+                                    (fromIntegral $ length mem)
+                                    (vtCollapse $ VarGroup [ln, rn], rhs)
                                     t
                                   )
                                   (getTopOpMap mem s)
@@ -1858,11 +1859,11 @@ asn gbs _ mem lhs rhs= do
                               (
                                 Op (fromInteger 17)
                                 (insertOp
-                                  (lt, rt)
+                                  (tCollapse lt, tCollapse rt)
                                   (
                                     Defined
-                                    (fromInteger 17)
-                                    (VarGroup [ln, rn], rhs)
+                                    (fromIntegral $ length mem)
+                                    (vtCollapse $ VarGroup [ln, rn], rhs)
                                     t
                                   )
                                   (M.empty, Nothing)
