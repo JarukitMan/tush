@@ -1,4 +1,8 @@
 FIX:
+- Can't make recursive operators. Not even with explicit typing (casting the type in front)
+  It says [operator] not defined for some operator used inside... Probably an issue in Parse.
+  No, in the Evaluate module, the splitAt is reversed from what it should be.
+  It gives the child mem from top instead of from bottom.
 
 TODO:
 - Test operators.

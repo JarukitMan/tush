@@ -24,9 +24,9 @@ main = do
         Right tokens -> do
           -- DEBUG
           -- putStrLn $ "\ESC[1;32m[TOKENS]\ESC[0m\n" ++ (show tokens)
-          -- putStrLn $ "\ESC[1;32m[PARTS]\ESC[0m\n"  ++ (show $ bunch tokens)
-          -- putStrLn $ "\ESC[1;32m[SENTENCE]\ESC[0m\n"  ++ ((show . parse) tokens)
-          result <- ((interpret True Tany initmem) . parse) tokens
+          -- putStrLn $ "\ESC[1;32m[PARTS]\ESC[0m\n"  ++ (show $ bunch initmem tokens)
+          -- putStrLn $ "\ESC[1;32m[SENTENCE]\ESC[0m\n"  ++ ((show . parse initmem) tokens)
+          result <- ((interpret True Tany initmem) . parse initmem) tokens
           case result of
             Nothing -> return ()
             Just (_, _, out) -> do
@@ -62,9 +62,9 @@ mainLoop gbs mem = do
       Right tokens -> do
         -- DEBUG
         -- putStrLn $ "\ESC[1;32m[TOKENS]\ESC[0m\n" ++ (show tokens)
-        -- putStrLn $ "\ESC[1;32m[PARTS]\ESC[0m\n"  ++ (show $ bunch tokens)
-        -- putStrLn $ "\ESC[1;32m[SENTENCE]\ESC[0m\n"  ++ ((show . parse) tokens)
-        result <- ((interpret gbs Tany mem) . parse) tokens
+        -- putStrLn $ "\ESC[1;32m[PARTS]\ESC[0m\n"  ++ (show $ bunch mem tokens)
+        -- putStrLn $ "\ESC[1;32m[SENTENCE]\ESC[0m\n"  ++ ((show . parse mem) tokens)
+        result <- ((interpret gbs Tany mem) . parse mem) tokens
         case result of
           Just (nbs, newmem, out) -> do
             -- output <- cap out
@@ -380,6 +380,7 @@ initmem =
             insertOp (Ttup [], Tbln) (Base int (Tint)) $
             insertOp (Ttup [], Tchr) (Base int (Tint)) $
             insertOp (Ttup [], Tstr) (Base int (Tint))
+            -- insertOp (Ttup [], Tany) (Base int (Tint))
             (empty, Nothing)
           )
         ),
@@ -390,6 +391,7 @@ initmem =
             insertOp (Ttup [], Tbln) (Base flt (Tflt)) $
             insertOp (Ttup [], Tchr) (Base flt (Tflt)) $
             insertOp (Ttup [], Tstr) (Base flt (Tflt))
+            -- insertOp (Ttup [], Tany) (Base flt (Tflt))
             (empty, Nothing)
           )
         ),
@@ -400,6 +402,7 @@ initmem =
             insertOp (Ttup [], Tbln) (Base chr (Tchr)) $
             insertOp (Ttup [], Tchr) (Base chr (Tchr)) $
             insertOp (Ttup [], Tstr) (Base chr (Tchr))
+            -- insertOp (Ttup [], Tany) (Base chr (Tchr))
             (empty, Nothing)
           )
         ),
@@ -410,6 +413,7 @@ initmem =
             insertOp (Ttup [], Tbln) (Base bln (Tbln)) $
             insertOp (Ttup [], Tchr) (Base bln (Tbln)) $
             insertOp (Ttup [], Tstr) (Base bln (Tbln))
+            -- insertOp (Ttup [], Tany) (Base bln (Tbln))
             (empty, Nothing)
           )
         ),

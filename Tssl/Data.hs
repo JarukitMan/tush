@@ -1,6 +1,6 @@
 module Tssl.Data where
 
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
 import Data.Word(Word8)
 import Data.List(intercalate)
 import Misc
@@ -75,6 +75,19 @@ instance Show Token where
         Left str -> "\ESC[32m" ++ str ++ "\ESC[0m" ;
         Right tup -> show tup}) fmt) ++
         "\ESC[32m\"\ESC[0m"
+
+checkWrd :: Memory -> Token -> Token
+checkWrd mem tok =
+  case tok of
+    Wrd word ->
+      case mem `getMem` word of
+        Nothing -> tok
+        Just (Op r _)  -> Opr r word
+        Just (Val  _)  -> Var   word
+    Tup toks -> Tup $ map (checkWrd mem) toks
+    Arr toks -> Arr $ map (checkWrd mem) toks
+    Fmt prts -> Fmt $ map (\x -> case x of {Left txts -> Left txts; Right tup -> Right $ checkWrd mem tup}) prts
+    _ -> tok
 
 -- data Word =
 --   Var String | Opr Word8 String | Str String | Pth String | Int Integer | Chr Char | Bln Bool | Typ Type |
@@ -198,12 +211,13 @@ zipVar (VarGroup vg) val =
 
 data VarTree = VarName String | VarGroup [VarTree]
   deriving (Eq)
+
 instance Show Operator where
   show :: Operator -> String
   show op =
     case op of
       Base _ t    -> "base with output type "    ++ show t
-      Defined s _ t -> "defined at " ++ show s ++ "with output type " ++ show t
+      Defined s (_, e) t -> "defined at " ++ show s ++ "with output type " ++ show t ++ " and Expression " ++ show e
 
 insertOp :: (Type, Type) -> Operator -> OpMap -> OpMap
 insertOp (left, right) op (lmap, lany) =
@@ -245,6 +259,15 @@ lookupOp (left, right) (lmap, lany) =
 -- Error-checking should be done by the interpreter. This tree allows for variables.
 data Expression = Expression Word8 String Expression Expression | Operand Token
   deriving (Show, Ord, Eq)
+
+flatten :: Expression -> [Token]
+flatten (Operand o) = [o]
+flatten (Expression p o l r) =
+  case (l, r) of
+    ((Operand (Tup [])), (Operand (Tup []))) -> [Opr p o]
+    (_, (Operand (Tup []))) -> flatten l ++ [Opr p o]
+    ((Operand (Tup [])), _) -> Opr p o:flatten r
+    _ -> flatten l ++ Opr p o:flatten r
 
 getMem :: Memory -> String -> Maybe Data
 getMem (x:xs) key =
@@ -334,10 +357,19 @@ vCollapse v =
     Arr' t vs -> Arr' t (map vCollapse vs)
     _         -> v
 
-hasOp :: [Token] -> Bool
-hasOp [] = False
-hasOp ((Opr _ _):_) = True
-hasOp (_:xs) = hasOp xs
+hasOp :: Memory -> [Token] -> Bool
+hasOp _ [] = False
+hasOp mem (x:xs) =
+  (
+    case x of
+      Opr _ _ -> True
+      Wrd wrd ->
+        case mem `getMem` wrd of
+          Just (Op _ _) -> True
+          _ -> False
+      _ -> False
+  )
+  || hasOp mem xs
 
 getRank :: Token -> Word8
 getRank x =

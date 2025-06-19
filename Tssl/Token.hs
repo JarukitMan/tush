@@ -208,21 +208,21 @@ pmtMaybe x =
 -- preprocess (x:xs) = x:(preprocess xs)
 preprocess :: [Chunk] -> [Chunk]
 preprocess [] = []
-preprocess (Tuple tup:xs) = Tuple (preprocess tup):xs
-preprocess (FString tup:xs) = FString (preprocess tup):xs
-preprocess (Array tup:xs) = Array (preprocess tup):xs
-preprocess (Word "for":x:Word "in":xs) =
+preprocess (Tuple tup:xs) = Tuple (preprocess tup):preprocess xs
+preprocess (FString tup:xs) = FString (preprocess tup):preprocess xs
+preprocess (Array tup:xs) = Array (preprocess tup):preprocess xs
+preprocess (Word "for":x@(Word _):Word "in":xs) =
       case splitWith (\t -> case t of {Tuple _ -> True ; _ -> False}) xs of
         ([], _) -> x:preprocess xs
         (_, []) -> x:preprocess xs
-        (front, back) -> Word "foreach":Tuple [x, Word ",", Tuple front]:preprocess back
+        (front, back) -> Word "foreach":Tuple [x, Word ",", Tuple (preprocess front)]:preprocess back
 preprocess (chunk:ts)
   |
   chunk `elem` [Word "if", Word "for", Word "while"] =
     case splitWith (\t -> case t of {Tuple _ -> True ; _ -> False}) ts of
       ([], _) -> chunk:preprocess ts
       (_, []) -> chunk:preprocess ts
-      (front, back) -> chunk:Tuple front:preprocess back
+      (front, back) -> chunk:Tuple (preprocess front):preprocess back
   |
   chunk == Word "continue" = Word "return":Tuple []:preprocess ts
   |

@@ -6,13 +6,12 @@ echo "That's
 Crazy."
 1 + 2 - 3 * 4 + 5 #implicit echo
 
-for i in [0..100] 
-{
+for i in 0..10 {
 	while i < 1000 {
-		echo -n i #we can infer that this is referring to the variable not the literal character 'i'
-		       #because it's 1. defined 2. alone 3. not inside a string.
+		echo -n i
 		i = i + 1
-	} else {
+	}
+	else {
 		echo "done"
 	}
 }
@@ -20,15 +19,17 @@ for i in [0..100]
 echo "Something \"in \nthe \middle\" lol\\"
 
 else {
-	echo done for real #we know this is not referring to a variable because we know
-	                   #only variables and literals can be passed to outsider functions
-			   #and this sentence is not a variable. It even contains space.
+	echo done "for" real
 }
 
 #Loop a through z
 
-for char in ['a'..'z'] {
-	char
+for char in 'a'..'z' {
+	echo char
+}
+
+foreach (char, 'a'..'z') {
+	echo char
 }
 
 That's cool.

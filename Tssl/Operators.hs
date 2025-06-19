@@ -6,6 +6,7 @@ import Tssl.Evaluate
 import Tssl.Parse
 import Data.Maybe
 import Data.List
+import Data.Word(Word8)
 import qualified Data.Map as M
 import qualified Data.Char as C
 import System.Directory
@@ -432,7 +433,8 @@ next gbs etp mem lhs rhs = catch (do
         -- l' <- case lhs of
           -- Expression _ _ _ _ -> return l
           -- Operand _ -> check l
-        right <- interpret lbs etp ml rhs
+        -- right <- interpret lbs etp ml rhs
+        right <- interpret lbs etp ml (parse ml (flatten rhs))
           -- case exp2typ ml rhs of
           --   Nothing -> return Nothing
           --   Just t -> interpret lbs t ml rhs
@@ -710,23 +712,25 @@ wrt gbs _ mem lhs rhs = do
           Just t -> interpret lbs t ml rhs
       case right of
         Nothing -> return Nothing
-        Just (rbs, mr, r) -> do
-          file <- openBinaryFile (unwords $ argify r) WriteMode
+        Just (rbs, mr, r) ->
           case l of
-            Str' x -> do
-              (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
-              _ <- waitForProcess ph `catch` handler2
-              return $ Just (rbs, mr, Tup' [])
+            -- Str' x -> do
+            --   (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
+            --   _ <- waitForProcess ph `catch` handler2
+            --   return $ Just (rbs, mr, Tup' [])
             Tup' (Str' x:xs) -> do
+              file <- openBinaryFile (unwords $ argify r) WriteMode
               args <- argIO xs
               (_, _, _, ph) <- createProcess (proc x args) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
             Pth' x -> do
+              file <- openBinaryFile (unwords $ argify r) WriteMode
               (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
             Tup' (Pth' x:xs) -> do
+              file <- openBinaryFile (unwords $ argify r) WriteMode
               args <- argIO xs
               (_, _, _, ph) <- createProcess (proc x args) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
@@ -759,23 +763,25 @@ apn gbs _ mem lhs rhs = do
           Just t -> interpret lbs t ml rhs
       case right of
         Nothing -> return Nothing
-        Just (rbs, mr, r) -> do
-          file <- openBinaryFile (unwords $ argify r) AppendMode
+        Just (rbs, mr, r) ->
           case l of
-            Str' x -> do
-              (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
-              _ <- waitForProcess ph `catch` handler2
-              return $ Just (rbs, mr, Tup' [])
+            -- Str' x -> do
+            --   (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
+            --   _ <- waitForProcess ph `catch` handler2
+            --   return $ Just (rbs, mr, Tup' [])
             Tup' (Str' x:xs) -> do
+              file <- openBinaryFile (unwords $ argify r) AppendMode
               args <- argIO xs
               (_, _, _, ph) <- createProcess (proc x args) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
             Pth' x -> do
+              file <- openBinaryFile (unwords $ argify r) AppendMode
               (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
             Tup' (Pth' x:xs) -> do
+              file <- openBinaryFile (unwords $ argify r) AppendMode
               args <- argIO xs
               (_, _, _, ph) <- createProcess (proc x args) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
@@ -1327,18 +1333,25 @@ ift gbs etp mem lhs rhs =
         _                        -> return Nothing
 
 els :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
-els gbs etp mem lhs rhs = do
-  left <-
-    case exp2typ mem lhs of
-      Just Tbln -> interpret gbs Tbln mem lhs
-      Just Tany -> interpret gbs Tbln mem lhs
-      _         -> return Nothing
-  case left of
-    Nothing -> return Nothing
-    Just (lbs, ml, _) ->
-      if lbs == False
-      then interpret lbs etp ml rhs
-      else return $ Just (lbs, ml, Tup' [])
+els gbs etp mem lhs rhs =
+  case lhs of
+    Operand (Tup []) ->
+      if not gbs
+      then interpret gbs etp mem rhs
+      else return $ Just (gbs, mem, Tup' [])
+    _ -> return Nothing
+-- els gbs etp mem lhs rhs = do
+  -- left <-
+  --   case exp2typ mem lhs of
+  --     Just Tbln -> interpret gbs Tbln mem lhs
+  --     Just Tany -> interpret gbs Tbln mem lhs
+  --     _         -> return Nothing
+  -- case left of
+  --   Nothing -> return Nothing
+  --   Just (lbs, ml, _) ->
+  --     if lbs == False
+  --     then interpret lbs etp ml rhs
+  --     else return $ Just (lbs, ml, Tup' [])
 
 -- Make it just if but it's recursive until the predicate evaluates to false.
 whl :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
@@ -1394,7 +1407,7 @@ frl gbs etp mem lhs rhs = do
     Operand (Tup []) ->
       case rhs of
         Operand (Tup [Tup predicate, expression]) ->
-          case parse predicate of
+          case parse mem predicate of
             Expression _ "," (Expression _ "," ini pdc) inc -> do
               iniout <- interpret gbs etp (newscope mem) ini
               case iniout of
@@ -1403,7 +1416,7 @@ frl gbs etp mem lhs rhs = do
                   (whl ibs etp im (Expression 0 "," (Operand expression) inc) pdc) >>=
                   (\out -> case out of {Nothing -> return Nothing; Just (obs, om, ov) -> return $ Just (obs, drop 1 om, ov)})
             _ ->
-              (putStrLn $ "Invalid for loop syntax at `" ++ show (parse predicate) ++ "`.")
+              (putStrLn $ "Invalid for loop syntax at `" ++ show (parse mem predicate) ++ "`.")
               >>= (\_ -> return Nothing)
         _ -> (putStrLn $ "Invalid for loop syntax at `" ++ show rhs ++ "`.") >>= (\_ -> return Nothing)
     _ -> do
@@ -1553,7 +1566,7 @@ opr _ _ mem _ _ =
 -- Eval right, then check left if it needs evaluation, if it doesn't then check type of left, then assign (or not).
 -- Maybe I'll add support for pattern matching here later.
 asn :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
-asn gbs _ mem lhs rhs= do
+asn gbs _ mem lhs rhs = do
   case lhs of
     -- To catch things already defined.
     Operand (Var vname) -> asn gbs Tany mem (Operand (Wrd vname)) rhs
@@ -1681,6 +1694,16 @@ asn gbs _ mem lhs rhs= do
                 case t of
                   Ttup tt -> concat $ zipWith (zipName) vg tt
                   _       -> undefined -- This would mean the parsing was wrong, and would therefore fail.
+          -- Creates new expression tree from a fake memory used only for parsing
+          -- the tree with the operator name in scope.
+          -- Used if the operator doesn't already exist.
+          newrhs :: Word8 -> String -> Expression
+          newrhs rank opname =
+            parse
+            (
+              insertMem opname (Op rank (M.empty, Nothing)) mem
+            )
+            (flatten rhs)
         -- case exp2typ mem rhs of
         --   Nothing -> return Nothing
         --   Just t ->
@@ -1690,7 +1713,7 @@ asn gbs _ mem lhs rhs= do
             case getMem mem opname of
               -- do not insert duplicate operator data
               Just (Op rank _) ->
-                case exp2typ mem rhs of
+                case exp2typ mem (newrhs rank opname) of
                   Nothing -> do
                     putStrLn $ "Can't derive the type of the defined operator `" ++ opname ++ "`."
                     return Nothing
@@ -1707,7 +1730,7 @@ asn gbs _ mem lhs rhs= do
                           (
                             Defined
                             (fromIntegral $ length mem)
-                            (VarGroup [], rhs)
+                            (VarGroup [VarGroup [], VarGroup []], rhs)
                             t
                           )
                           (getTopOpMap mem opname)
@@ -1720,7 +1743,7 @@ asn gbs _ mem lhs rhs= do
                 putStrLn $ "Operator named `" ++ opname ++ "` does not exist, but is marked as an operator by the tokenizer."
                 return Nothing
           Operand (Wrd opname) ->
-            case exp2typ mem rhs of
+            case exp2typ mem (newrhs 17 opname) of
               Nothing -> do
                 putStrLn $ "Can't derive the type of the defined operator `" ++ opname ++ "`."
                 return Nothing
@@ -1737,7 +1760,7 @@ asn gbs _ mem lhs rhs= do
                       (
                         Defined
                         (fromIntegral $ length mem)
-                        (VarGroup [], rhs)
+                        (VarGroup [VarGroup [], VarGroup []], newrhs 17 opname)
                         t
                       )
                       (M.empty, Nothing)
@@ -1747,7 +1770,7 @@ asn gbs _ mem lhs rhs= do
                   Tup' []
                 )
           Operand (Tup [Int rank, Wrd opname]) ->
-            case exp2typ mem rhs of
+            case exp2typ mem (newrhs (fromInteger rank) opname) of
               Nothing -> do
                 putStrLn $ "Can't derive the type of the defined operator `" ++ opname ++ "`."
                 return Nothing
@@ -1764,7 +1787,7 @@ asn gbs _ mem lhs rhs= do
                       (
                         Defined
                         (fromIntegral $ length mem)
-                        (VarGroup [], rhs)
+                        (VarGroup [VarGroup [], VarGroup []], newrhs (fromInteger rank) opname)
                         t
                       )
                       (M.empty, Nothing)
@@ -1787,7 +1810,7 @@ asn gbs _ mem lhs rhs= do
                     case getMem mem s of
                       -- do not insert duplicate operator data
                       Nothing ->
-                        case exp2typ (M.fromList (zipName (vtCollapse $ VarGroup [ln, rn]) (tCollapse $ Ttup [lt, rt])):mem) rhs of
+                        case exp2typ (M.fromList (zipName (vtCollapse $ VarGroup [ln, rn]) (tCollapse $ Ttup [lt, rt])):mem) (newrhs (fromInteger rank) s) of
                           Nothing -> do
                             putStrLn $ "Can't derive the type of the defined operator `" ++ show (Tup ts) ++ "`."
                             return Nothing
@@ -1804,7 +1827,7 @@ asn gbs _ mem lhs rhs= do
                                   (
                                     Defined
                                     (fromIntegral $ length mem)
-                                    (vtCollapse $ VarGroup [ln, rn], rhs)
+                                    (vtCollapse $ VarGroup [ln, rn], newrhs (fromInteger rank) s)
                                     t
                                   )
                                   (M.empty, Nothing)
@@ -1830,7 +1853,7 @@ asn gbs _ mem lhs rhs= do
                     case getMem mem s of
                       -- do not insert duplicate operator data
                       Just (Op rank _) ->
-                        case exp2typ (M.fromList (zipName (vtCollapse $ VarGroup [ln, rn]) (tCollapse $ Ttup [lt, rt])):mem) rhs of
+                        case exp2typ (M.fromList (zipName (vtCollapse $ VarGroup [ln, rn]) (tCollapse $ Ttup [lt, rt])):mem) (newrhs 17 s) of
                           Nothing -> do
                             putStrLn $ "Can't derive the output type of the operator `" ++ s ++ "` being defined."
                             return Nothing
@@ -1847,7 +1870,7 @@ asn gbs _ mem lhs rhs= do
                                   (
                                     Defined
                                     (fromIntegral $ length mem)
-                                    (vtCollapse $ VarGroup [ln, rn], rhs)
+                                    (vtCollapse $ VarGroup [ln, rn], newrhs 17 s)
                                     t
                                   )
                                   (getTopOpMap mem s)
@@ -1874,7 +1897,7 @@ asn gbs _ mem lhs rhs= do
                                   (
                                     Defined
                                     (fromIntegral $ length mem)
-                                    (vtCollapse $ VarGroup [ln, rn], rhs)
+                                    (vtCollapse $ VarGroup [ln, rn], newrhs 17 s)
                                     t
                                   )
                                   (M.empty, Nothing)
@@ -1891,14 +1914,6 @@ asn gbs _ mem lhs rhs= do
                     \_ -> return  Nothing
           expr@(Expression _ _ _ _)  ->
             asn gbs Tany mem (Expression 4 "opr" (Operand $ Tup []) (Operand $ Tup $ flatten expr)) rhs
-            where
-              flatten (Operand o) = [o]
-              flatten (Expression p o l r) =
-                case (l, r) of
-                  ((Operand (Tup [])), (Operand (Tup []))) -> [Opr p o]
-                  (_, (Operand (Tup []))) -> flatten l ++ [Opr p o]
-                  ((Operand (Tup [])), _) -> Opr p o:flatten r
-                  _ -> flatten l ++ Opr p o:flatten r
           _ ->
             (putStrLn $ "Operator construction can't be parsed.") >>=
             \_ -> return Nothing

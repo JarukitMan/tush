@@ -20,6 +20,8 @@ interpret b t mem (Expression _ opr left right) =
   case getMem mem opr of
     Nothing -> do
       putStrLn $ "Operator `" ++ opr ++ "` not defined"
+      -- putStrLn $ "Expression: " ++ show expr
+      -- putStrLn $ "Memory: " ++ show mem
       return Nothing
     Just dat ->
       case dat of
@@ -55,19 +57,22 @@ interpret b t mem (Expression _ opr left right) =
                       Just (b', mem', lefts') <- interpret b t mem left
                       Just (b'', mem'', rights') <- interpret b' t mem' right
                       let
-                        (used, unused) = splitAt (fromIntegral scopenum) mem''
+                        (unused, used) = splitAt (length mem'' - fromIntegral scopenum) mem''
                         -- Input Values.
                         vals = Tup' [vCollapse lefts', vCollapse rights']
-                        newmem = case zipVar names vals of
-                          Just ns -> Just $ (M.fromList ns):used
-                          Nothing -> Nothing
+                        -- newmem = case zipVar names vals of
+                        --   Just ns -> Just $ (M.fromList ns):used
+                        --   Nothing -> Nothing
+                        newmem = do
+                          ns <- zipVar names vals
+                          Just $ (M.fromList ns):used
                       case newmem of
                         Just nm -> do
                           out <- interpret b'' t nm optree
                           case out of
                             Nothing -> return Nothing
                             -- Simple memory dropping. Might not work as intended.
-                            Just (nb, frontmem, result) -> return $ Just (nb, drop 1 frontmem ++ unused, vCollapse result)
+                            Just (nb, frontmem, result) -> return $ Just (nb, unused ++ (drop 1 frontmem), vCollapse result)
                         Nothing -> return Nothing
 interpret b _ mem (Operand x) =
   case x of
@@ -79,7 +84,11 @@ interpret b _ mem (Operand x) =
             Val (Left  typ) -> do
               putStrLn $ "Variable of type `" ++ show typ ++ "` does not have a value assigned to it."
               return Nothing
-            Op r _ -> interpret b Tany mem (Expression r wrd (Operand $ Tup []) (Operand $ Tup []))
+            -- Realistically, this case should only ever happen when a function doesn't accept any input itself. So.
+            -- Op r _ -> interpret b Tany mem (Expression r wrd (Operand $ Tup []) (Operand $ Tup []))
+            Op _ _ -> do
+              putStrLn $ "Evaluation Error: Operator `" ++ wrd ++ "`found at bottom level."
+              return Nothing
         Nothing -> return $ Just (b, mem, Str' wrd)
     Var var ->
       case getMem mem var of
@@ -90,13 +99,13 @@ interpret b _ mem (Operand x) =
               putStrLn $ "Variable of type `" ++ show typ ++ "` does not have a value assigned to it."
               return Nothing
             Op _ _ -> do
-              putStrLn  $ "Evaluation Error: Operand `" ++ var ++ "` stored as a variable name."
+              putStrLn  $ "Evaluation Error: Operator `" ++ var ++ "` stored as a variable name."
               return Nothing
         Nothing -> do
           putStrLn  $ "Variable `" ++ var ++ "` not found in scope."
           return Nothing
     Opr _ opr -> do
-      putStrLn  $ "Evaluation Error: Operand `" ++ opr ++ "`found at bottom level."
+      putStrLn  $ "Evaluation Error: Operator `" ++ opr ++ "`found at bottom level."
       return Nothing
     Int int -> return $ Just (b, mem, Int' int)
     Flt flt -> return $ Just (b, mem, Flt' flt)
@@ -150,23 +159,27 @@ interpret b _ mem (Operand x) =
     where
       handletup :: [Token] -> IO (Maybe (Bool, Memory, [Value]))
       handletup xs =
-          if hasOp xs
+          if hasOp mem xs
           then do
             -- DEBUG
             -- putStrLn $ "handling " ++ show (Tup xs)
             -- tup <- ((interpret t $ newscope mem) . parse) xs
             tup <-
-              case exp2typ mem (parse xs) of
+              case exp2typ mem (parse mem xs) of
                 Nothing -> do
                   putStrLn $ "exp2typ failed to parse " ++ show xs ++ ". (before interpreting.)"
+                  -- DEBUG
+                  -- putStrLn $ "Expression: " ++ show (parse mem xs)
                   return Nothing
                 Just typ -> do
                   -- DEBUG
                   -- putStrLn $ "Output type is: " ++ show typ
-                  ((interpret b typ $ newscope mem) . parse) xs
+                  ((interpret b typ $ newscope mem) . parse mem) xs
             case tup of
               Nothing -> do
                 putStrLn $ "exp2typ failed to parse " ++ show xs ++ "."
+                -- DEBUG
+                -- putStrLn $ "Expression: " ++ show (parse mem xs)
                 return Nothing
               Just (b', m', Tup' tup') -> return $ Just (b', drop 1 m', (map vCollapse tup'))
               Just (b', m', val)       -> return $ Just (b', drop 1 m', [val])
@@ -196,11 +209,11 @@ interpret b _ mem (Operand x) =
                             Just (Val val) -> return $ Just (gb, m, val:ys)
                         Tup tup -> do
                           out <-
-                            case exp2typ m (parse tup) of
+                            case exp2typ m (parse m tup) of
                               Nothing -> do
                                 putStrLn $ "exp2typ failed to parse " ++ show xs ++ ". (Nested)"
                                 return Nothing
-                              Just typ -> ((interpret gb typ $ newscope m) . parse) tup
+                              Just typ -> ((interpret gb typ $ newscope m) . parse m) tup
                           case out of
                             Nothing -> return Nothing
                             Just (gb', m', result) ->
@@ -208,9 +221,9 @@ interpret b _ mem (Operand x) =
                         tok -> do
                           -- Just (_, result) <- ((interpret t $ newscope mem) . parse) [tok]
                           out <-
-                            case exp2typ m (parse [tok]) of
+                            case exp2typ m (parse m [tok]) of
                               Nothing -> return Nothing
-                              Just typ -> ((interpret gb typ $ newscope m) . parse) [tok]
+                              Just typ -> ((interpret gb typ $ newscope m) . parse m) [tok]
                           case out of
                             Nothing -> return Nothing
                             Just (gb', m', result) ->
@@ -250,8 +263,8 @@ exp2typ mem (Operand x) =
     Tup [ ] -> Just $ Ttup []
     -- Tup [a] -> Just [tok2typ mem a]
     Tup tup ->
-      if hasOp tup
-      then exp2typ mem (parse tup)
+      if hasOp mem tup
+      then exp2typ mem (parse mem tup)
       -- else Just $ tCollapse $ Ttup $ map (tok2typ mem) tup
       else
         case
@@ -269,9 +282,9 @@ exp2typ mem (Operand x) =
           Nothing -> Nothing
     -- TODO: Be better
     Arr arr ->
-      if hasOp arr
+      if hasOp mem arr
       then
-        case exp2typ mem (parse arr) of
+        case exp2typ mem (parse mem arr) of
           Nothing           -> Nothing
           Just (Ttup (h:_)) -> Just $ Tarr $ tCollapse h
           Just h            -> Just $ Tarr $ tCollapse h
@@ -280,6 +293,7 @@ exp2typ mem (Operand x) =
           -- Nothing -> Nothing
           Nothing -> Just $ Tarr Tany
           Just h  -> Just $ Tarr $ tCollapse h
+    Opr _ _ -> Nothing
     tok -> Just $ tCollapse (tok2typ mem tok)
 exp2typ mem ex@(Expression _ op left right) =
   case findName "return" ex of
