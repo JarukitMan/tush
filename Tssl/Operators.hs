@@ -1568,7 +1568,10 @@ asn gbs _ mem lhs rhs = do
     -- Implement hole
     Operand (Wrd "_") ->
       interpret gbs Tany mem rhs >>=
-      \_ -> return $ Just (gbs, mem, Tup' [])
+      \rout ->
+        case rout of
+          Nothing -> return Nothing
+          Just (rbs, mr, _) -> return $ Just (rbs, mr, Tup' [])
     -- To catch things already defined.
     Operand (Var vname) -> asn gbs Tany mem (Operand (Wrd vname)) rhs
     Operand (Opr _ vname) -> asn gbs Tany mem (Operand (Wrd vname)) rhs
