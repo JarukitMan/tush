@@ -698,7 +698,7 @@ cap val =
           case process of
             (_, Just out, _, procHand) -> do
               output <- do
-                hSetBuffering out NoBuffering
+                -- hSetBuffering out NoBuffering
                 hSetBinaryMode out True
                 B.hGetContents out
               -- copyHandleData out stdout

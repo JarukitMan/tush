@@ -8,6 +8,8 @@ import Data.Maybe
 import Data.List
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import qualified Data.Text.Encoding as T
+import qualified Data.ByteString as B
 -- import Data.Word(Word8)
 import qualified Data.Map as M
 import qualified Data.Char as C
@@ -595,16 +597,17 @@ pipe gbs _ mem lhs rhs = (do
                   (inp, out, _, randle) <- createProcess (proc x'' (map T.unpack rarg)) {std_in = CreatePipe, std_out = CreatePipe}
                   case (inp, out) of
                     (Just i, Just o) -> do
-                      hSetBinaryMode o True
-                      txt <- T.hGetContents o
-                      T.hPutStr i lout
-                      hClose i
+                      txt <- do
+                        T.hPutStr i lout
+                        hSetBinaryMode o True
+                        hClose i
+                        B.hGetContents o
                       -- putStrLn txt
                       exitcode <- waitForProcess randle
                       if exitcode /= ExitSuccess
                       then T.putStrLn $ "Process " `T.append` x `T.append` (T.unwords rarg) `T.append` " exited with exit code: " `T.append` T.show exitcode
                       else return ()
-                      return $ Just (rbs, mr, Str' txt)
+                      return $ Just (rbs, mr, Str' $ T.decodeUtf8Lenient txt)
                     _ -> do
                       T.putStrLn $ "Could not create process " `T.append` x `T.append` (T.unwords rarg) `T.append` " properly."
                       return Nothing
@@ -665,16 +668,17 @@ here gbs _ mem lhs rhs = (do
                   (inp, out, _, landle) <- createProcess (proc (T.unpack x) (map T.unpack larg)) {std_in = CreatePipe, std_out = CreatePipe}
                   case (inp, out) of
                     (Just i, Just o) -> do
-                      hSetBinaryMode o True
-                      txt <- T.hGetContents o
-                      T.hPutStr i rout
-                      hClose i
+                      txt <- do
+                        T.hPutStr i rout
+                        hSetBinaryMode o True
+                        hClose i
+                        B.hGetContents o
                       -- putStrLn txt
                       exitcode <- waitForProcess landle
                       if exitcode /= ExitSuccess
                       then T.putStrLn $ "Process " `T.append` x `T.append` (T.unwords larg) `T.append` " exited with exit code: " `T.append` T.show exitcode
                       else return ()
-                      return $ Just (lbs, ml, Str' txt)
+                      return $ Just (lbs, ml, Str' $ T.decodeUtf8Lenient txt)
                     _ -> do
                       T.putStrLn $ "Could not create process " `T.append` x `T.append` (T.unwords larg) `T.append` " properly."
                       return Nothing
@@ -733,11 +737,11 @@ wrt gbs _ mem lhs rhs = do
   where
     handler :: IOError -> IO ()
     handler e = do
-        T.putStrLn $ "here: " `T.append` T.show e
+        T.putStrLn $ "write: " `T.append` T.show e
         return ()
     handler2 :: IOError -> IO ExitCode
     handler2 e = do
-        T.putStrLn $ "here: " `T.append` T.show e
+        T.putStrLn $ "write: " `T.append` T.show e
         return $ ExitFailure 1
 
 apn :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
@@ -784,11 +788,11 @@ apn gbs _ mem lhs rhs = do
   where
     handler :: IOError -> IO ()
     handler e = do
-        T.putStrLn $ "here: " `T.append` T.show e
+        T.putStrLn $ "append: " `T.append` T.show e
         return ()
     handler2 :: IOError -> IO ExitCode
     handler2 e = do
-        T.putStrLn $ "here: " `T.append` T.show e
+        T.putStrLn $ "append: " `T.append` T.show e
         return $ ExitFailure 1
   --       Just (rbs, mr, r) -> do
   --         lout <- cap l

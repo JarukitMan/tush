@@ -54,7 +54,7 @@ chunkify list@(x T.:< xs)
     (rest, unchunked) <- chunkify xs
     Right (Word ",":rest, unchunked)
   |
-  x `T.elem` ":|" = do
+  x `T.elem` ":|." = do
   -- x `elem` ":|." = do
     (rest, unchunked) <- chunkify xs
     Right (Word (T.singleton x):rest, unchunked)
@@ -93,10 +93,10 @@ chunkify list@(x T.:< xs)
     let (front, back) = splitEsc (`T.elem` " \t\r\n,{}()[]:.\'|") list
     (rest, unchunked) <- chunkify back
     -- -- I'll just check for floats here screw it.
-    -- case rest of
-    --   (Word ".":Word next:rest') -> Right $ (Word (front ++ '.':next):rest', unchunked)
-    --   _ -> Right $ (Word front:rest, unchunked)
-    Right (Word front:rest, unchunked)
+    case rest of
+      (Word ".":Word next:rest') -> Right $ (Word (front `T.append` ('.' `T.cons` next)):rest', unchunked)
+      _ -> Right $ (Word front:rest, unchunked)
+    -- Right (Word front:rest, unchunked)
 
 fmtChunk :: T.Text -> Either T.Text ([Chunk], T.Text)
 -- fmtChunk [] = Left "Unclosed Formatted String"
