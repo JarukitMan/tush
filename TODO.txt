@@ -1,16 +1,14 @@
 FIX:
-- Can't make recursive operators. Not even with explicit typing (casting the type in front)
-  It says [operator] not defined for some operator used inside... Probably an issue in Parse.
-  No, in the Evaluate module, the splitAt is reversed from what it should be.
-  It gives the child mem from top instead of from bottom.
 
 TODO:
-- Test operators.
 - Add debug messages to the base operations.
-- Add help and time operators.
+- Add help, exec, and time operators.
 - Implement Grr.
 - Implement Imp.
 - Implement Tsf.
+- Add globbing/regex. Will probably be built into Tsf...
+- Write a proper README and split the current one to Tssl and Tsf.
+- Write examples.
 
 FUTURE:
 Front part:
@@ -21,6 +19,8 @@ Front part:
 - Seperate buffer for outputs, allowing for navigating and yanking the outputs.
 Lang part:
 - Make "," follow spec.
+  ^ So apparently, the way GHC does it is that they just brute-forced it up to a 64-tuple.
+                   I will do the same.
 - Rust style enum and match, which implies switch case.
 - Basically, pattern matching. This applies to variable assignment too.
 - Struct and typeclass/trait.

@@ -2,134 +2,125 @@ module Tssl.Token(tokenize) where
 import Misc
 -- import qualified Data.Map as M 
 import Tssl.Data
+import qualified Data.Text as T
 -- import Data.Word
 
-tokenize :: Memory -> String -> Either String [Token]
+tokenize :: Memory -> T.Text -> Either T.Text [Token]
 tokenize memory x = case (chunkify) x of
   Left errmsg -> Left errmsg
   Right (chunks, rest) ->
-    if null rest
+    if T.null rest
     then Right $ map (checkWord memory) (preprocess chunks)
     else Left "Unmatched Right Delimiter ({[]})"
 
 data Chunk =
-  Word String | Character Char | String String | FString [Chunk] | Tuple [Chunk] | Array [Chunk]
+  Word T.Text | Character Char | String T.Text | FString [Chunk] | Tuple [Chunk] | Array [Chunk]
   -- Period | Pipe | Endline
   deriving (Show, Eq)
 
-chunkify :: String -> Either String ([Chunk], String)
 -- Catch chars
-chunkify ('\'':'\\':x:'\'':xs) = do
-  (rest, unchunked) <- chunkify xs
+chunkify :: T.Text -> Either T.Text ([Chunk], T.Text)
+chunkify ('\'' T.:< '\\' T.:< x T.:< '\''T.:< xs) = do
+  (rest, unchunked) <- chunkify (xs)
   Right (Character (toEsc x):rest, unchunked)
-chunkify ('\'':x:'\'':xs) = do
+chunkify ('\'' T.:< x T.:< '\'' T.:< xs) = do
   (rest, unchunked) <- chunkify xs
   Right (Character x:rest, unchunked)
 
 -- Catch formatted strings
-chunkify ('f':'"':xs) = do
+chunkify ('f' T.:< '"'T.:< xs) = do
   (front, back) <- fmtChunk xs -- for fmtChunk, it can't rely on splitEsc. It will have to internally use its own version of splitEsc.
   (rest, unchunked) <- chunkify back
   Right (FString front:rest, unchunked)
 
 -- Catch dirs that lead with dots.
-chunkify ('.':'.':xs) = do
+chunkify ('.'T.:< '.' T.:< xs) = do
     (rest, unchunked) <- chunkify xs
     Right (Word "..":rest, unchunked)
-chunkify ('.':'/':xs) = do
-    let (front, xs') = splitEsc (== ' ') xs
-    (rest, unchunked) <- chunkify xs'
-    Right (Word ('.':'/':front):rest, unchunked)
+-- This one is unneeded.
+-- chunkify ('.' T.:< '/' T.:< xs) = do
+--     let (front, xs') = splitEsc (== ' ') xs
+--     (rest, unchunked) <- chunkify xs'
+--     Right (Word ('.' `T.cons` '/' `T.cons` front):rest, unchunked)
 
-chunkify list@(x:xs)
+chunkify T.Empty = Right ([], T.empty)
+
+chunkify list@(x T.:< xs)
   |
-  x `elem` " \t" =
+  x `T.elem` " \t" =
     chunkify xs
   |
-  x `elem` ",\r\n" = do
+  x `T.elem` ",\r\n" = do
     (rest, unchunked) <- chunkify xs
     Right (Word ",":rest, unchunked)
   |
-  x == '.' = do
+  x `T.elem` ":|" = do
+  -- x `elem` ":|." = do
     (rest, unchunked) <- chunkify xs
-    -- Put the float-checking thing here too, because the clause below breaks nested accessor.
-    case rest of
-      (Word w:ws) ->
-        if isFlt w
-        then
-          let (front, back) = splitEsc (== '.') w
-                                                        -- drop the dot
-          in  Right (Word ".":Word front:Word ".":Word (drop 1 back):ws, unchunked)
-        else
-          Right (Word ".":rest, unchunked)
-      _ -> Right (Word ".":rest, unchunked)
+    Right (Word (T.singleton x):rest, unchunked)
   |
-  x == '|' = do
-    (rest, unchunked) <- chunkify xs
-    Right (Word "|":rest, unchunked)
-  |
-  x `elem` "})]" =
+  x `T.elem` "})]" =
     Right ([], list)
   |
   x == '#' =
-    chunkify $ dropWhile (/= '\n') xs
+    chunkify $ T.dropWhile (/= '\n') xs
   |
   x == '"' =
-    let (front, back) = splitEsc (== '"') xs
-    in case back of
-      [] -> Left "Unclosed String"
-      _  -> do
-        (rest, unchunked) <- chunkify $ drop 1 back
-        Right (String front:rest, unchunked)
+    let
+      (front, back) = splitEsc (== '"') xs
+    in
+      if T.null back
+      then Left "Unclosed String"
+      else do
+          (rest, unchunked) <- chunkify $ T.drop 1 back
+          Right (String front:rest, unchunked)
   |
-  x `elem` "({" = do
+  x `T.elem` "({" = do
     (chunk, back) <- chunkify xs
-    (rest, unchunked) <- chunkify $ drop 1 back
-    if (headMaybe back) == (Just $ matching x)
+    (rest, unchunked) <- chunkify $ T.drop 1 back
+    if (tHeadMaybe back) == (Just $ matching x)
     then Right (Tuple chunk:rest, unchunked)
     else Left "Unclosed Left Tuple Delimiter \"({})\""
   |
   x == '[' = do
     (chunk, back) <- chunkify xs
-    (rest, unchunked) <- chunkify $ drop 1 back
-    if (headMaybe back) == (Just $ matching x)
+    (rest, unchunked) <- chunkify $ T.drop 1 back
+    if (tHeadMaybe back) == (Just $ matching x)
     then Right (Array chunk:rest, unchunked)
     else Left "Unclosed Left Array Delimiter \"[]\""
   |
   otherwise = do
-    let (front, back) = splitEsc (`elem` " \t\r\n,{}()[].\"|") list
+    let (front, back) = splitEsc (`T.elem` " \t\r\n,{}()[]:.\'|") list
     (rest, unchunked) <- chunkify back
-    -- I'll just check for floats here screw it.
-    if isInt front
-    then
-      case rest of
-        (Word ".":Word next:rest') ->
-          if isInt next
-          then Right $ (Word (front ++ '.':next):rest', unchunked)
-          else Right $ (Word front:rest, unchunked)
-        _ -> Right $ (Word front:rest, unchunked)
-    else
-      Right $ (Word front:rest, unchunked)
-chunkify [] = Right ([], [])
+    -- -- I'll just check for floats here screw it.
+    -- case rest of
+    --   (Word ".":Word next:rest') -> Right $ (Word (front ++ '.':next):rest', unchunked)
+    --   _ -> Right $ (Word front:rest, unchunked)
+    Right (Word front:rest, unchunked)
 
-fmtChunk :: String -> Either String ([Chunk], String)
-fmtChunk [] = Left "Unclosed Formatted String"
-fmtChunk list@(x:xs)
+fmtChunk :: T.Text -> Either T.Text ([Chunk], T.Text)
+-- fmtChunk [] = Left "Unclosed Formatted String"
+fmtChunk list
+  |
+  T.null list = Left "Unclosed Formatted String"
   |
   x == '"' = Right ([], xs)
   |
   x == '{' = do
     (chunked, unchunked) <- chunkify xs
-    if headMaybe unchunked == Just '}'
+    if tHeadMaybe unchunked == Just '}'
     then do
-      (back, rest) <- fmtChunk $ drop 1 unchunked
+      (back, rest) <- fmtChunk $ T.drop 1 unchunked
       Right (Tuple chunked:back, rest)
     else Left "Unclosed Formatted String Tuple Delimiter \"{}\""
   |
   otherwise = do
-  let (front, xs') = splitEsc (`elem` "\"{") list
+  let (front, xs') = splitEsc (`T.elem` "\"{") list
   (back, rest) <- fmtChunk xs'
   Right (String front:back, rest)
+  where
+    x = T.head list
+    xs = T.drop 1 list
 
 checkWord :: Memory -> Chunk -> Token
 checkWord memory x =
@@ -169,7 +160,7 @@ checkWord memory x =
         Str s -> Left  s
         _     -> Right x'
 
-pmtMaybe :: String -> Maybe Type
+pmtMaybe :: T.Text -> Maybe Type
 pmtMaybe x =
   case x of
     "Int" -> Just Tint

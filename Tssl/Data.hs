@@ -1,8 +1,13 @@
 module Tssl.Data where
 
 import qualified Data.Map.Strict as M
+import Data.Char(ord)
 import Data.Word(Word8)
 import Data.List(intercalate)
+import qualified Data.ByteString as B
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
+import qualified Data.Text.Encoding as T
 import Misc
 import System.Process
 import System.IO
@@ -14,27 +19,27 @@ import Control.Exception
 -- Variables and operators use the same namespace.
 -- Maps name -> value
 -- list for scope, kept track of in main and altered in eval 
-type Memory = [M.Map String Data]
+type Memory = [M.Map T.Text Data]
 
 newscope :: Memory -> Memory
 newscope mem = M.empty:mem
 
-insertMem :: String -> Data -> Memory -> Memory
+insertMem :: T.Text -> Data -> Memory -> Memory
 insertMem dname dat (m:ms) =  (M.insert dname dat m):ms
 insertMem dname dat [] =  [M.insert dname dat M.empty]
 
-insertVar :: String -> Value -> Memory -> Memory
+insertVar :: T.Text -> Value -> Memory -> Memory
 insertVar vname val (m:ms) = (M.insert vname (Val $ Right val) m):ms
 insertVar vname val [] = [M.insert vname (Val $ Right val) M.empty]
 
-updateVar :: String -> Value -> Memory -> Memory
+updateVar :: T.Text -> Value -> Memory -> Memory
 updateVar vname val (m:ms) =
   case vname `M.lookup` m of
     Nothing -> m:(updateVar vname val ms)
     Just _  -> (M.insert vname (Val $ Right val) m):ms
 updateVar _ _ [] = []
 
-insertBlankVar :: String -> Type -> Memory -> Memory
+insertBlankVar :: T.Text -> Type -> Memory -> Memory
 insertBlankVar vname typ (m:ms) = (M.insert vname (Val $ Left typ) m):ms
 insertBlankVar vname typ [] =     [M.insert vname (Val $ Left typ) M.empty]
 -- Op in the Value enumuration returns the cardinality, scope and
@@ -48,18 +53,19 @@ data Data = Op Word8 OpMap | Val (Either Type Value)
 type OpMap = (M.Map Type (M.Map Type Operator, Maybe Operator), Maybe (M.Map Type Operator, Maybe Operator))
 
 data Token =
-  Wrd String | Var String | Opr Word8 String | Str String | Pth String | Int Integer | Flt Double | Chr Char | Bln Bool | Typ Type |
-  Tup [Token] | Arr [Token] | Fmt [Either String Token]
+  Wrd T.Text | Var T.Text | Opr Word8 T.Text | Str T.Text | Pth FilePath | Int Integer | Flt Double | Chr Char | Bln Bool | Typ Type |
+  Tup [Token] | Arr [Token] | Fmt [Either T.Text Token]
   deriving (Eq, Ord)
 
+-- This is for tokens so it's fine
 instance Show Token where
   show :: Token -> String
   show t =
     case t of
-      Wrd   wrd -> "\ESC[30m"    ++ wrd                            ++ "\ESC[0m"
-      Var   var -> "\ESC[30m"    ++ var                            ++ "\ESC[0m"
-      Opr _ opr -> "\ESC[31m"    ++ opr                            ++ "\ESC[0m"
-      Str   str -> "\ESC[32m\""  ++ str                            ++ "\"\ESC[0m"
+      Wrd   wrd -> "\ESC[30m"    ++ T.unpack wrd                   ++ "\ESC[0m"
+      Var   var -> "\ESC[30m"    ++ T.unpack var                   ++ "\ESC[0m"
+      Opr _ opr -> "\ESC[31m"    ++ T.unpack opr                   ++ "\ESC[0m"
+      Str   str -> "\ESC[32m\""  ++ T.unpack str                   ++ "\"\ESC[0m"
       Pth   pth -> "\ESC[33m"    ++ pth                            ++ "\ESC[0m"
       Int   int -> "\ESC[34m"    ++ show int                       ++ "\ESC[0m"
       Flt   flt -> "\ESC[34m"    ++ show flt                       ++ "\ESC[0m"
@@ -72,7 +78,7 @@ instance Show Token where
         "\ESC[32mf\""
         ++ intercalate " "
         (map (\x -> case x of {
-        Left str -> "\ESC[32m" ++ str ++ "\ESC[0m" ;
+        Left str -> "\ESC[32m" ++ T.unpack str ++ "\ESC[0m" ;
         Right tup -> show tup}) fmt) ++
         "\ESC[32m\"\ESC[0m"
 
@@ -96,12 +102,147 @@ checkWrd mem tok =
 
 -- Strict form of token.
 data Value =
-  Int' Integer | Flt' Double | Chr' Char | Str' String | Bln' Bool | Pth' String | Typ' Type |
+  Int' Integer | Flt' Double | Chr' Char | Str' T.Text | Bln' Bool | Pth' FilePath | Typ' Type |
   Arr' Type [Value] | Tup' [Value] | Break -- | Sig' Signal
-  deriving (Ord, Eq)
+  deriving (Eq)
+
+instance Ord Value where
+  compare :: Value -> Value -> Ordering
+  compare v1 v2 =
+    case (v1, v2) of
+      (Int' a, Int' b) -> a `compare` b
+      (Int' a, Flt' b) -> (fromInteger a) `compare` b
+      (Int' a, Chr' b) -> (fromInteger a) `compare` (ord b)
+      (Int' a, Str' b) -> a `compare` (fromIntegral $ T.length b)
+      (Int' a, Bln' b) -> if b then a `compare` 1 else a `compare` 0
+      (Int' a, Pth' b) -> a `compare` (fromIntegral $ length (pieces (== '/') (T.pack b)))
+      (Int' a, Typ' b) -> show a `compare` show b
+      (Int' a, Arr' _ b) ->
+        case b of
+          [c] -> Int' a `compare` c
+          _   -> LT
+      (Int' a, Tup' b) ->
+        case b of
+          [c] -> Int' a `compare` c
+          _   -> LT
+      (Flt' a, Int' b) -> a `compare` (fromIntegral b)
+      (Flt' a, Flt' b) -> a `compare` b
+      (Flt' a, Chr' b) -> a `compare` (fromIntegral $ ord b)
+      (Flt' a, Str' b) -> a `compare` (fromIntegral $ T.length b)
+      (Flt' a, Bln' b) -> if b then a `compare` 1 else a `compare` 0
+      (Flt' a, Pth' b) -> a `compare` (fromIntegral $ length (pieces (== '/') (T.pack b)))
+      (Flt' a, Typ' b) -> show a `compare` show b
+      (Flt' a, Arr' _ b) ->
+        case b of
+          [c] -> Flt' a `compare` c
+          _   -> LT
+      (Flt' a, Tup' b) ->
+        case b of
+          [c] -> Flt' a `compare` c
+          _   -> LT
+      (Chr' a, Int' b) -> (ord a) `compare` (fromIntegral b)
+      (Chr' a, Flt' b) -> (fromIntegral $ ord a) `compare` b
+      (Chr' a, Chr' b) -> a `compare` b
+      (Chr' a, Str' b) ->
+        case T.uncons b of
+          Just (c, "") -> a `compare` c
+          _   -> LT
+      (Chr' a, Bln' b) -> if b then a `compare` 'T' else a `compare` 'F'
+      (Chr' a, Pth' b) -> (ord a) `compare` (fromIntegral $ length (pieces (== '/') (T.pack b)))
+      (Chr' _, Typ' _) -> LT
+      (Chr' a, Arr' _ b) ->
+        case b of
+          [c] -> Chr' a `compare` c
+          _   -> LT
+      (Chr' a, Tup' b) ->
+        case b of
+          [c] -> Chr' a `compare` c
+          _   -> LT
+      (Str' a, Int' b) -> b `compare` (fromIntegral $ T.length a)
+      (Str' a, Flt' b) -> b `compare` (fromIntegral $ T.length a)
+      (Str' a, Chr' b) ->
+        case T.uncons a of
+          Just (c, "") -> b `compare` c
+          _   -> GT
+      (Str' a, Str' b) -> a `compare` b
+      (Str' a, Bln' b) -> a `compare` T.show b
+      (Str' a, Pth' b) -> a `compare` (T.pack b)
+      (Str' a, Typ' b) -> a `compare` T.show b
+      (Str' a, Arr' _ b) ->
+        case b of
+          [c] -> Str' a `compare` c
+          _   -> LT
+      (Str' a, Tup' b) ->
+        case b of
+          [c] -> Str' a `compare` c
+          _   -> LT
+      (Bln' a, Int' b) -> if a then b `compare` 1 else b `compare` 0
+      (Bln' a, Flt' b) -> if a then b `compare` 1 else b `compare` 0
+      (Bln' a, Chr' b) -> if a then b `compare` 'T' else b `compare` 'F'
+      (Bln' a, Str' b) -> T.show a `compare` b
+      (Bln' a, Bln' b) -> a `compare` b
+      (Bln' a, Pth' b) -> T.show a `compare` (T.pack b)
+      (Bln' _, Typ' _) -> LT
+      (Bln' a, Arr' _ b) ->
+        case b of
+          [c] -> Bln' a `compare` c
+          _   -> LT
+      (Bln' a, Tup' b) ->
+        case b of
+          [c] -> Bln' a `compare` c
+          _   -> LT
+      (Pth' a, Int' b) -> (fromIntegral $ length (pieces (== '/') (T.pack a))) `compare` b
+      (Pth' a, Flt' b) -> b `compare` (fromIntegral $ length (pieces (== '/') (T.pack a)))
+      (Pth' a, Chr' b) -> (ord b) `compare` (fromIntegral $ length (pieces (== '/') (T.pack a)))
+      (Pth' a, Str' b) -> (T.pack a) `compare` b
+      (Pth' a, Bln' b) -> a `compare` show b
+      (Pth' a, Pth' b) -> a `compare` b
+      (Pth' a, Typ' b) -> a `compare` show b
+      (Pth' a, Arr' _ b) ->
+        case b of
+          [c] -> Pth' a `compare` c
+          _   -> LT
+      (Pth' a, Tup' b) ->
+        case b of
+          [c] -> Pth' a `compare` c
+          _   -> LT
+      (Typ' a, Int' b) -> T.show a `compare` T.show b
+      (Typ' a, Flt' b) -> T.show a `compare` T.show b
+      (Typ' _, Chr' _) -> GT
+      (Typ' a, Str' b) -> T.show a `compare` b
+      (Typ' _, Bln' _) -> GT
+      (Typ' a, Pth' b) -> show a `compare` b
+      (Typ' a, Typ' b) -> a `compare` b
+      (Typ' a, Arr' _ b) ->
+        case b of
+          [c] -> Typ' a `compare` c
+          _   -> LT
+      (Typ' a, Tup' b) ->
+        case b of
+          [c] -> Typ' a `compare` c
+          _   -> LT
+      (Arr' _ a, b) ->
+        case a of
+          [c] -> c `compare` b
+          _ ->
+            case b of
+              Arr' _ c -> length a `compare` length c
+              Tup' c -> length a `compare` length c
+              _ -> GT
+      (Tup' a, b) ->
+        case a of
+          [c] -> c `compare` b
+          _ ->
+            case b of
+              Arr' _ c -> length a `compare` length c
+              Tup' c -> length a `compare` length c
+              _ -> GT
+      (_, Break) -> EQ
+      (Break, _) -> EQ
 
 -- data Signal = Break | Continue | Return
 
+-- TODO: Make a tShow that converts directly to text later?
 instance Show Value where
   show :: Value -> String
   show val =
@@ -109,7 +250,7 @@ instance Show Value where
       Int' int -> show int
       Flt' flt -> show flt
       Chr' chr -> show chr
-      Str' str -> str
+      Str' str -> T.unpack str
       Bln' bln -> show bln
       Pth' pth -> pth
       Typ' typ -> show typ
@@ -196,7 +337,7 @@ instance Eq Operator where
   _ == _ = False
 
 -- Might not work as intended if a VarGroup contains only one VarName.
-zipVar :: VarTree -> Value -> Maybe [(String, Data)]
+zipVar :: VarTree -> Value -> Maybe [(T.Text, Data)]
 zipVar (VarName vn) val = Just [(vn, Val $ Right val)]
 zipVar (VarGroup vg) val =
   case val of
@@ -209,7 +350,7 @@ zipVar (VarGroup vg) val =
       else Nothing
     _ -> Nothing
 
-data VarTree = VarName String | VarGroup [VarTree]
+data VarTree = VarName T.Text | VarGroup [VarTree]
   deriving (Eq)
 
 instance Show Operator where
@@ -257,7 +398,7 @@ lookupOp (left, right) (lmap, lany) =
                 Just op -> Just op
 
 -- Error-checking should be done by the interpreter. This tree allows for variables.
-data Expression = Expression Word8 String Expression Expression | Operand Token
+data Expression = Expression Word8 T.Text Expression Expression | Operand Token
   deriving (Show, Ord, Eq)
 
 flatten :: Expression -> [Token]
@@ -269,14 +410,14 @@ flatten (Expression p o l r) =
     ((Operand (Tup [])), _) -> Opr p o:flatten r
     _ -> flatten l ++ Opr p o:flatten r
 
-getMem :: Memory -> String -> Maybe Data
+getMem :: Memory -> T.Text -> Maybe Data
 getMem (x:xs) key =
   case M.lookup key x of
     Nothing -> getMem xs key
     result  -> result
 getMem [] _ = Nothing
 
-getTopOpMap :: Memory -> String -> OpMap
+getTopOpMap :: Memory -> T.Text -> OpMap
 getTopOpMap (m:_) opname =
   case M.lookup opname m of
     Just (Op _ opmap) -> opmap
@@ -377,22 +518,23 @@ getRank x =
     Opr r _ -> r
     _       -> 255
 
-argify :: Value -> [String]
+-- This needs to be string because those things need strings.
+argify :: Value -> [T.Text]
 argify val =
   case val of
-    Int' int -> [show int]
-    Flt' flt -> [show flt]
-    Chr' chr -> [[chr]]
+    Int' int -> [T.show int]
+    Flt' flt -> [T.show flt]
+    Chr' chr -> [T.singleton chr]
     Str' str -> [str]
-    Bln' bln -> [show bln]
-    Pth' pth -> [pth]
-    Typ' typ -> [show typ]
+    Bln' bln -> [T.show bln]
+    Pth' pth -> [T.pack pth]
+    Typ' typ -> [T.show typ]
     Tup' tup -> concat $ map argify tup
     Arr' _ arr -> concat $ map argify arr
     Break    -> []
 
 -- Wanna make it better, but I don't know how.
-argIO :: [Value] -> IO [String]
+argIO :: [Value] -> IO [T.Text]
 argIO vals =
   (
     sequence $ map
@@ -404,24 +546,24 @@ argIO vals =
             out <- cap v
             case out of
               Nothing -> return []
-              Just txt -> return (words txt)
+              Just txt -> return (T.words txt)
           Tup' (Pth' _:_)   -> do
             out <- cap v
             case out of
               Nothing -> return []
-              Just txt -> return (words txt)
+              Just txt -> return (T.words txt)
           Arr' Tstr _ -> do
             out <- cap v
             case out of
               Nothing -> return []
-              Just txt -> return (words txt)
+              Just txt -> return (T.words txt)
           Arr' Tpth _ -> do
             out <- cap v
             case out of
               Nothing -> return []
-              Just txt -> return (words txt)
+              Just txt -> return (T.words txt)
           Tup' [] -> return []
-          _        -> return [show v]
+          _        -> return [T.show v]
     )
     vals
   ) >>=
@@ -452,7 +594,7 @@ cmd val =
     _ -> putStrLn $ show val
   where
     handler :: IOError -> IO ()
-    handler e = putStrLn $ "cmd: " ++ show e
+    handler e = T.putStrLn $ "cmd: " `T.append` T.show e
     exec command args = (exec' command args) `catch` handler
     exec' command args =
       case command of
@@ -461,16 +603,16 @@ cmd val =
           args' <- argIO args
           case out of
             Nothing -> return ()
-            Just out' -> callProcess out' args'
+            Just out' -> callProcess (T.unpack out') (map T.unpack args')
         Arr' _ _ -> do
           out <- cap command
           args' <- argIO args
           case out of
             Nothing -> return ()
-            Just out' -> callProcess out' args'
+            Just out' -> callProcess (T.unpack out') (map T.unpack args')
         _ ->
           (argIO args) >>=
-          (\args' -> callProcess (show command) args')
+          (\args' -> callProcess (show command) (map T.unpack args'))
 
 cmdConc :: Value -> IO ()
 cmdConc val =
@@ -492,7 +634,7 @@ cmdConc val =
           case out of
             Nothing -> return ()
             Just out' ->
-              spawnProcess out' args' >>=
+              spawnProcess (T.unpack out') (map T.unpack args') >>=
               \_ -> return ()
         Arr' _ _ -> do
           out <- cap command
@@ -500,19 +642,19 @@ cmdConc val =
           case out of
             Nothing -> return ()
             Just out' ->
-              spawnProcess out' args' >>=
+              spawnProcess (T.unpack out') (map T.unpack args') >>=
               \_ -> return ()
         _ ->
           (argIO args) >>=
           (\args' ->
-            spawnProcess (show command) args') >>=
+            spawnProcess (show command) (map T.unpack args')) >>=
             \_ -> return ()
       
 -- For usage in parts where the output needs to be captured.
 -- E.G: tuples that includes this verse in its return value.
 -- Doesn't work with fastfetch (and probably some other programs) for some reason.
 -- The reason seems encoding-related so I just converted it to binary, thus fucking some characters up.
-cap :: Value -> IO (Maybe String)
+cap :: Value -> IO (Maybe T.Text)
 cap val =
   case val of
     Tup' (command:args) -> exec command args
@@ -521,14 +663,14 @@ cap val =
     _ -> do
       -- don't know about this...
       -- putStrLn $ show val
-      return $ Just $ show val
+      return $ Just $ T.show val
   where
     handler :: IOError -> IO (Maybe a)
     handler e = do
-        putStrLn $ "cap: " ++ show e
+        T.putStrLn $ "cap: " `T.append` T.show e
         return Nothing
     exec command args = (exec' command args) `catch` handler
-    exec' :: Value -> [Value] -> IO (Maybe String)
+    exec' :: Value -> [Value] -> IO (Maybe T.Text)
     exec' command args =
       let
         capbody c as = do
@@ -540,7 +682,7 @@ cap val =
               -- as
               CreateProcess
               (
-                RawCommand c as'
+                RawCommand (T.unpack c) (map T.unpack as')
               )
               -- cwd, env
               Nothing Nothing
@@ -558,18 +700,18 @@ cap val =
               output <- do
                 hSetBuffering out NoBuffering
                 hSetBinaryMode out True
-                hGetContents out
+                B.hGetContents out
               -- copyHandleData out stdout
               -- DEBUG
               -- putStr output
               exitCode <- waitForProcess procHand
               if exitCode /= ExitSuccess
-              then putStrLn $ "Process " ++ c ++ unwords as' ++ " exited with exit code: " ++ show exitCode
+              then T.putStrLn $ "Process " `T.append` c `T.append` T.unwords as' `T.append` " exited with exit code: " `T.append` T.show exitCode
               else return ()
               -- Bash does this too. Might as well, since I don't want my args to contain newlines.
-              return $ Just (unwords $ words output)
+              return $ Just (T.unwords $ T.words $ T.decodeUtf8Lenient output)
             _ ->
-              (putStrLn $ "Can't create process " ++ (intercalate " " $ argify val) ++ " properly") >>=
+              (T.putStrLn $ "Can't create process " `T.append` (T.intercalate " " $ argify val) `T.append` " properly") >>=
               (\_ -> return Nothing)
       in
       case command of
@@ -583,5 +725,5 @@ cap val =
           case out of
             Nothing -> return Nothing
             Just out' -> capbody out' args
-        _ -> capbody (show command) args
+        _ -> capbody (T.show command) args
         -- capbody (show command) args

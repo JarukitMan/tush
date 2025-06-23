@@ -7,18 +7,19 @@ let tup = {{1 2 3} {'4' '5' '6'} {"seven" "eight" "nine"}}
 
 opr (Int b Int c) add (Int a Int d) = ( return a + b + c + d )
 
-for num in arr {
-	num
+_ = for num in arr {
+	return num
 }
 
-for i in [0..len mat] {
-	for j in [0..len mat.i] {
-		echo -n f"What is \\\{this}...{mat.i.j} "
+echo mat
+
+_ = for i in 0..len mat - 1 {
+	for j in 0..len mat:i - 1 {
+		echo -n f"What is \\\{this}...{mat:i:j} "
 	}
 	echo
-	for j in [0..len mat.i] {
-		echo -n f"{mat.i.j} "
+	for j in 0..len mat:i - 1 {
+		echo -n f"{mat:i:j} "
 	}
 }
-
 #should print 1 10 100 1000 in different lines.

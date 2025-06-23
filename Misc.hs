@@ -1,4 +1,6 @@
 module Misc where
+-- import qualified Data.ByteString.Char8 as B
+import qualified Data.Text as T
 
 allRight :: [Either a b] -> Either a [b]
 allRight [] = Right []
@@ -22,22 +24,22 @@ isInt (x:xs) =
   then and (map (`elem` ['0'..'9']) xs)
   else False
 
-intMaybe :: String -> Maybe Integer
-intMaybe x = if isInt x then Just $ read x else Nothing
+intMaybe :: T.Text -> Maybe Integer
+intMaybe x = if isInt $ T.unpack x then Just $ read $ T.unpack x else Nothing
 
 isFlt :: String -> Bool
 isFlt num = isInt front && not (null $ drop 1 back) && and (map (`elem` ['0'..'9']) (drop 1 back))
   where (front, back) = splitWith (== '.') num
 
 -- If this fails I'll be really mad.
-fltMaybe :: String -> Maybe Double
-fltMaybe [] = Nothing
+fltMaybe :: T.Text -> Maybe Double
+fltMaybe "" = Nothing
 fltMaybe num =
-  if isFlt num
-  then Just $ read num
+  if isFlt $ T.unpack num
+  then Just $ read $ T.unpack num
   else Nothing
 
-blnMaybe :: String -> Maybe Bool
+blnMaybe :: T.Text -> Maybe Bool
 blnMaybe x =
   case x of
     "True" -> Just True
@@ -52,21 +54,27 @@ chrMaybe ('\'':'\\':x:'\'':[]) = Just $ toEsc x
 chrMaybe _ = Nothing
 
 -- Prototype version. Real version should query from a directory.
-pthMaybe :: String -> Maybe FilePath
-pthMaybe [] = Nothing
+pthMaybe :: T.Text -> Maybe FilePath
+pthMaybe "" = Nothing
 pthMaybe str =
-  if '/' `elem` str || str == "~"
-  then Just str
+  if '/' `T.elem` str || str == "~"
+  then Just $ T.unpack str
   else Nothing
 
-pieces :: (Char -> Bool) -> String -> [String]
-pieces _ [] = []
-pieces f xs = front:pieces f (drop 1 back)
+pieces :: (Char -> Bool) -> T.Text -> [T.Text]
+pieces f xs =
+  if not $ T.null xs
+  then front:pieces f (T.drop 1 back)
+  else []
   where (front, back) = splitEsc f xs
 
 headMaybe :: [a] -> Maybe a
 headMaybe [] = Nothing
 headMaybe (x:_) = Just x
+
+tHeadMaybe :: T.Text -> Maybe Char
+tHeadMaybe T.Empty = Nothing
+tHeadMaybe (x T.:< _) = Just x
 
 lastMaybe :: [a] -> Maybe a
 lastMaybe [] = Nothing
@@ -74,9 +82,9 @@ lastMaybe [a] = Just a
 lastMaybe (_:xs) = lastMaybe xs
 
 -- lines but \n and ,
-liners :: String -> [String]
-liners [] = []
-liners xs = line:(liners $ drop 1 rest) where (line, rest) = splitWith (`elem` ['\n', ',']) xs
+-- liners :: String -> [String]
+-- liners [] = []
+-- liners xs = line:(liners $ drop 1 rest) where (line, rest) = splitWith (`elem` ['\n', ',']) xs
 
 splitWith :: (a -> Bool) -> [a] -> ([a], [a])
 splitWith _ [] = ([], [])
@@ -86,16 +94,26 @@ splitWith f list@(x:xs) =
   else (x:front, back)
   where (front, back) = splitWith f xs
 
-splitEsc :: (Char -> Bool) -> String -> (String, String)
-splitEsc _ [] = ([], [])
-splitEsc f ('\\':x:xs) =
-  (toEsc x:front, back)
-  where (front, back) = splitEsc f xs
-splitEsc f list@(x:xs) =
-  if f x
-  then ([], list)
-  else (x:front, back)
-  where (front, back) = splitEsc f xs
+splitEsc :: (Char -> Bool) -> T.Text -> (T.Text, T.Text)
+-- splitEsc _ [] = ([], [])
+-- splitEsc f ('\\':x:xs) =
+--   (toEsc x:front, back)
+--   where (front, back) = splitEsc f xs
+splitEsc f list
+  |
+  T.null list = (T.empty, T.empty)
+  |
+  x == '\\' =
+    (T.cons (toEsc x) front, back)
+  |
+  otherwise =
+    if f x
+    then (T.empty, list)
+    else (T.cons x front, back)
+  where
+    x = T.head list
+    xs = T.drop 1 list
+    (front, back) = splitEsc f xs
 
 toEsc :: Char -> Char
 toEsc x =

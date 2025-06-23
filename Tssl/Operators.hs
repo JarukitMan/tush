@@ -6,7 +6,9 @@ import Tssl.Evaluate
 import Tssl.Parse
 import Data.Maybe
 import Data.List
-import Data.Word(Word8)
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
+-- import Data.Word(Word8)
 import qualified Data.Map as M
 import qualified Data.Char as C
 import System.Directory
@@ -18,7 +20,7 @@ import System.Exit
 -- import System.Environment
 import Control.Exception
 import GHC.Float
-import Text.Read
+-- import Text.Read
 
 add :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
 add gbs etp mem lhs rhs = do
@@ -47,11 +49,11 @@ add gbs etp mem lhs rhs = do
                 (Chr' a, Int' b)       -> Chr' $ C.chr $ (C.ord a) + (fromInteger b)
                 (Chr' a, Chr' b)       -> Chr' $ C.chr $ (C.ord a) + (C.ord b)
                 (Bln' a, Bln' b)       -> Bln' $ a || b
-                (Pth' a, Str' b)       -> Pth' $ a ++ ('/':b)
-                (Str' a, Chr' b)       -> Str' $ a ++ [b]
-                (Chr' a, Str' b)       -> Str' $ a:b
-                (Str' a, b)            -> Str' $ a ++ show b
-                (a, Str' b)            -> Str' $ (show a) ++ b
+                (Pth' a, Str' b)       -> Pth' $ a ++ ('/':T.unpack b)
+                (Str' a, Chr' b)       -> Str' $ a `T.snoc` b
+                (Chr' a, Str' b)       -> Str' $ a `T.cons` b
+                (Str' a, b)            -> Str' $ a `T.append` T.show b
+                (a, Str' b)            -> Str' $ (T.show a) `T.append` b
                 (Arr' t1 a, Arr' t2 b) ->
                   if t1 == t2
                   then Arr' t1 (a ++ b)
@@ -109,10 +111,10 @@ sub gbs etp mem lhs rhs = do
                 (Chr' a, Int' b)       -> Just $ Chr' $ C.chr $ (C.ord a) - (fromInteger b)
                 (Chr' a, Chr' b)       -> Just $ Chr' $ C.chr $ (C.ord a) - (C.ord b)
                 -- (Bln' a, Bln' b)       -> Just $ Bln' $ a && b
-                (Str' a, Int' b)       -> Just $ Str' $ take (fromInteger b) a
+                (Str' a, Int' b)       -> Just $ Str' $ T.take (fromInteger b) a
                 (Arr' t a, Int' b)       -> Just $ Arr' t $ take (fromInteger b) a
-                (Str' a, Chr' b)       -> Just $ Str' $ filter (/= b) a
-                (Str' a, Str' b)       -> Just $ Str' $ reverse $ takeDiff (reverse a) (reverse b)
+                (Str' a, Chr' b)       -> Just $ Str' $ T.filter (/= b) a
+                (Str' a, Str' b)       -> Just $ Str' $ T.pack $ reverse $ takeDiff (reverse $ T.unpack a) (reverse $ T.unpack b)
                 (Arr' t1 a, Arr' t2 b) ->
                   if t1 == t2
                   then Just $ Arr' t1 (reverse (takeDiff (reverse a) (reverse b)))
@@ -159,7 +161,7 @@ sub gbs etp mem lhs rhs = do
                   let fcycle = cycle files
                   return $ Just (rbs, mr, Pth' $ (dropWhile (/= a) fcycle) !! (fromInteger b))
                 else do
-                  putStrLn $ "Directory " ++ a ++ " does not exist."
+                  T.putStrLn $ "Directory " `T.append` (T.pack a) `T.append` " does not exist."
                   return Nothing
               _ ->
                 case subv l r of
@@ -195,9 +197,9 @@ mpy gbs etp mem lhs rhs = do
                 (Flt' a, Int' b)       -> Just $ Flt' $ a * (fromInteger b)
                 (Flt' a, Flt' b)       -> Just $ Flt' $ a * b
                 (Int' a, Chr' b)       -> Just $ Int' $ a * (toInteger $ C.ord b)
-                (Chr' a, Int' b)       -> Just $ Str' $ replicate (fromInteger b) a
+                (Chr' a, Int' b)       -> Just $ Str' $ T.pack $ replicate (fromInteger b) a
                 (Bln' a, Bln' b)       -> Just $ Bln' $ a && b
-                (Str' a, Int' b)       -> Just $ Str' $ concat $ replicate (fromInteger b) a
+                (Str' a, Int' b)       -> Just $ Str' $ T.concat $ replicate (fromInteger b) a
                 -- (Arr' t a, Int' b)     -> Just $ Arr' (Tarr t) $ map (Arr' t) (replicate (fromInteger b) a)
                 (Tup' a, Int' b)       -> Just $ Tup' $ map (Tup') (replicate (fromInteger b) a)
                 (Arr' t1 a, Arr' t2 b) ->
@@ -281,7 +283,7 @@ dvd gbs etp mem lhs rhs = do
                 (Flt' a, Int' b)       -> Just $ Flt' $ a / (fromInteger b)
                 (Flt' a, Flt' b)       -> Just $ Flt' $ a / b
           --       (Bln' a, Bln' b)       -> Just $ Bln' $ a && b
-                (Str' a, Int' b)       -> Just $ Arr' Tstr $ map (Str') (divList (fromInteger b) a)
+                (Str' a, Int' b)       -> Just $ Arr' Tstr $ map (Str' . T.pack) (divList (fromInteger b) (T.unpack a))
                 (Arr' t a, Int' b)     -> Just $ Arr' (Tarr t) $ map (Arr' t) (divList (fromInteger b) a)
                 (Arr' t a, b)          ->
                   case sequence $ map (dvdv b) a of
@@ -316,8 +318,8 @@ dvd gbs etp mem lhs rhs = do
                 else Nothing
 
 -- TODO: Finish implementation
-dot :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
-dot gbs etp mem lhs rhs = do
+acs :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
+acs gbs etp mem lhs rhs = do
   left  <-
     case exp2typ mem lhs of
       Nothing -> return Nothing
@@ -335,27 +337,15 @@ dot gbs etp mem lhs rhs = do
           let
             dotv x y =
               case (x, y) of
-                (Str' a, Str' b)       -> Just $ Str' $ a ++ ('.':b)
-                (Tup' a, Str' b)       ->
-                  case lastMaybe a of
-                    Nothing -> Nothing
-                    Just a' ->
-                      case a' of
-                        Str' s -> Just $ Tup' $ (init a) ++ [(Str' $ s ++ ('.':b))]
-                        Pth' s -> Just $ Tup' $ (init a) ++ [(Pth' $ s ++ ('.':b))]
-                        _      -> Nothing
                 (Tup' a, Int' b)       -> a !? (fromInteger b)
-                -- HIGHLY inefficient.
-                (Int' a, Int' b)       -> Just $ Flt' $ read (show a ++ ('.':show b))
                 (Str' a, Int' b)       ->
-                  case a !? (fromInteger b) of
+                  case T.uncons $ T.drop (fromInteger b) a of
                     Nothing -> Nothing
-                    Just c  -> Just $ Chr' c
-                (Str' a, Arr' Tint b) -> Just $ Str' $ map snd (filter (\(i, _) -> Int' i `elem` b) (zip [0..] a))
+                    Just (c, _)  -> Just $ Chr' c
+                (Str' a, Arr' Tint b) -> Just $ Str' $ T.pack $ map snd (filter (\(i, _) -> Int' i `elem` b) (zip [0..] (T.unpack a)))
                 (Arr' _ a, Int' b)     -> a !? (fromInteger b)
                 (Arr' t a, Arr' Tint b) -> Just $ Arr' t $ map snd (filter (\(i, _) -> Int' i `elem` b) (zip [0..] a))
                 (Tup' a, Arr' Tint b) -> Just $ Tup' $ map snd (filter (\(i, _) -> Int' i `elem` b) (zip [0..] a))
-                (Tup' [], Tup' []) -> Just $ Pth' "."
                 _                      -> Nothing
           in
             case dotv l r of
@@ -384,19 +374,19 @@ cd gbs _ mem lhs rhs = do
           home <- getHomeDirectory
           pwd <- getCurrentDirectory
           setCurrentDirectory home
-          putStrLn $ "cd: " ++ pwd ++ " -> " ++ home
+          T.putStrLn $ "cd: " `T.append` (T.pack pwd) `T.append` " -> " `T.append` (T.pack home)
           return $ Just (rbs, mem', l)
         Just (rbs, mem', r) -> do
-          path <- canonicalizePath $ intercalate " " $ argify r
+          path <- canonicalizePath $ T.unpack $ T.intercalate " " $ argify r
           pathExists <- doesPathExist path
           if pathExists
           then do
             pwd <- getCurrentDirectory
-            putStrLn $ "cd: " ++ pwd ++ " -> " ++ path
+            T.putStrLn $ "cd: " `T.append` (T.pack pwd) `T.append` " -> " `T.append` (T.pack path)
             setCurrentDirectory path
             return $ Just (rbs, mem', l)
           else
-            (putStrLn $ "cd: Directory " ++ path ++ " doesn't exist.") >>=
+            (T.putStrLn $ "cd: Directory " `T.append` (T.pack path) `T.append` " doesn't exist.") >>=
             \_ -> return $ Nothing
         Nothing ->
           getHomeDirectory >>=
@@ -458,7 +448,7 @@ next gbs etp mem lhs rhs = catch (do
     -- didn't mean screwing up the user experience.
     check a =
         case a of
-          Str' x            -> execOr x
+          Str' x            -> execOr (T.unpack x)
           -- Tup' ((Str' x):_) -> execOr x
           -- Arr' Tstr (x:_)   -> execOr $ show x
           -- Str' _            -> cmd a >>= \_ -> return $ Tup' []
@@ -481,10 +471,11 @@ next gbs etp mem lhs rhs = catch (do
                   --   Just o  -> return $ Str' o
     handler :: IOError -> IO (Maybe a)
     handler e = do
-        putStrLn $ "next: " ++ show e
+        T.putStrLn $ "next: " `T.append` T.show e
         return Nothing
 
 -- The "&" operator
+-- In bash, jobs are sent to the background. We'll have to implement that later. Soon.
 also :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
 also gbs etp mem lhs rhs = catch (do
   left  <-
@@ -550,7 +541,7 @@ also gbs etp mem lhs rhs = catch (do
           --         --   Just o  -> return $ Str' o
     handler :: IOError -> IO (Maybe a)
     handler e = do
-        putStrLn $ "pipe: " ++ show e
+        T.putStrLn $ "also: " `T.append` T.show e
         return Nothing
 
 -- This takes either a tuple or a string on the left side, and feed it to the right side process.
@@ -595,36 +586,37 @@ pipe gbs _ mem lhs rhs = (do
           let
             lout = fromMaybe "" lo
             exec x xs = do
-              x' <- findExecutable x
+              x' <- findExecutable (T.unpack x)
               case x' of
-                Nothing -> return $ Just (rbs, mr, Str' $ lout ++ ' ':(show $ vCollapse $ Tup' $ Str' x:xs))
-                Just _  -> do
+                Nothing -> return Nothing
+                -- Nothing -> return $ Just (rbs, mr, Str' $ lout ++ ' ':(show $ vCollapse $ Tup' $ Str' x:xs))
+                Just x''  -> do
                   rarg <- argIO xs
-                  (inp, out, _, randle) <- createProcess (proc x rarg) {std_in = CreatePipe, std_out = CreatePipe}
+                  (inp, out, _, randle) <- createProcess (proc x'' (map T.unpack rarg)) {std_in = CreatePipe, std_out = CreatePipe}
                   case (inp, out) of
                     (Just i, Just o) -> do
                       hSetBinaryMode o True
-                      txt <- hGetContents o
-                      hPutStr i lout
+                      txt <- T.hGetContents o
+                      T.hPutStr i lout
                       hClose i
                       -- putStrLn txt
                       exitcode <- waitForProcess randle
                       if exitcode /= ExitSuccess
-                      then putStrLn $ "Process " ++ x ++ (unwords rarg) ++ " exited with exit code: " ++ show exitcode
+                      then T.putStrLn $ "Process " `T.append` x `T.append` (T.unwords rarg) `T.append` " exited with exit code: " `T.append` T.show exitcode
                       else return ()
                       return $ Just (rbs, mr, Str' txt)
                     _ -> do
-                      putStrLn $ "Could not create process " ++ x ++ (unwords rarg) ++ " properly."
+                      T.putStrLn $ "Could not create process " `T.append` x `T.append` (T.unwords rarg) `T.append` " properly."
                       return Nothing
           -- let lout = show l
           case r of
             Tup' (Str' x:xs) -> exec x xs
-            Tup' (Pth' x:xs) -> exec x xs
-            _ -> exec (show r) []) `catch` handler
+            Tup' (Pth' x:xs) -> exec (T.pack x) xs
+            _ -> exec (T.show r) []) `catch` handler
   where
     handler :: IOError -> IO (Maybe a)
     handler e = do
-        putStrLn $ "pipe: " ++ show e
+        T.putStrLn $ "pipe: " `T.append` T.show e
         return Nothing
 
 here :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
@@ -670,31 +662,31 @@ here gbs _ mem lhs rhs = (do
               --   Nothing -> return $ Just (lbs, ml, Str' $ rout ++ ' ':(show $ vCollapse $ Tup' $ Str' x:xs))
               --   Just _  -> do
                   larg <- argIO xs
-                  (inp, out, _, landle) <- createProcess (proc x larg) {std_in = CreatePipe, std_out = CreatePipe}
+                  (inp, out, _, landle) <- createProcess (proc (T.unpack x) (map T.unpack larg)) {std_in = CreatePipe, std_out = CreatePipe}
                   case (inp, out) of
                     (Just i, Just o) -> do
                       hSetBinaryMode o True
-                      txt <- hGetContents o
-                      hPutStr i rout
+                      txt <- T.hGetContents o
+                      T.hPutStr i rout
                       hClose i
                       -- putStrLn txt
                       exitcode <- waitForProcess landle
                       if exitcode /= ExitSuccess
-                      then putStrLn $ "Process " ++ x ++ (unwords larg) ++ " exited with exit code: " ++ show exitcode
+                      then T.putStrLn $ "Process " `T.append` x `T.append` (T.unwords larg) `T.append` " exited with exit code: " `T.append` T.show exitcode
                       else return ()
                       return $ Just (lbs, ml, Str' txt)
                     _ -> do
-                      putStrLn $ "Could not create process " ++ x ++ (unwords larg) ++ " properly."
+                      T.putStrLn $ "Could not create process " `T.append` x `T.append` (T.unwords larg) `T.append` " properly."
                       return Nothing
           -- let lout = show l
           case l of
             Tup' (Str' x:xs) -> exec x xs
-            Tup' (Pth' x:xs) -> exec x xs
-            _ -> exec (show l) []) `catch` handler
+            Tup' (Pth' x:xs) -> exec (T.pack x) xs
+            _ -> exec (T.show l) []) `catch` handler
   where
     handler :: IOError -> IO (Maybe a)
     handler e = do
-        putStrLn $ "here: " ++ show e
+        T.putStrLn $ "here: " `T.append` T.show e
         return Nothing
 
 wrt :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
@@ -719,33 +711,33 @@ wrt gbs _ mem lhs rhs = do
             --   _ <- waitForProcess ph `catch` handler2
             --   return $ Just (rbs, mr, Tup' [])
             Tup' (Str' x:xs) -> do
-              file <- openBinaryFile (unwords $ argify r) WriteMode
+              file <- openBinaryFile (T.unpack $ T.unwords $ argify r) WriteMode
               args <- argIO xs
-              (_, _, _, ph) <- createProcess (proc x args) {std_out = UseHandle file}
+              (_, _, _, ph) <- createProcess (proc (T.unpack x) (map T.unpack args)) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
             Pth' x -> do
-              file <- openBinaryFile (unwords $ argify r) WriteMode
+              file <- openBinaryFile (T.unpack $ T.unwords $ argify r) WriteMode
               (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
             Tup' (Pth' x:xs) -> do
-              file <- openBinaryFile (unwords $ argify r) WriteMode
+              file <- openBinaryFile (T.unpack $ T.unwords $ argify r) WriteMode
               args <- argIO xs
-              (_, _, _, ph) <- createProcess (proc x args) {std_out = UseHandle file}
+              (_, _, _, ph) <- createProcess (proc x (map T.unpack args)) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
             _ -> do
-              (appendFile (unwords (argify r)) (show l)) `catch` handler
+              (T.appendFile (T.unpack $ T.unwords (argify r)) (T.show l)) `catch` handler
               return $ Just (rbs, mr, Tup' [])
   where
     handler :: IOError -> IO ()
     handler e = do
-        putStrLn $ "here: " ++ show e
+        T.putStrLn $ "here: " `T.append` T.show e
         return ()
     handler2 :: IOError -> IO ExitCode
     handler2 e = do
-        putStrLn $ "here: " ++ show e
+        T.putStrLn $ "here: " `T.append` T.show e
         return $ ExitFailure 1
 
 apn :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
@@ -770,33 +762,33 @@ apn gbs _ mem lhs rhs = do
             --   _ <- waitForProcess ph `catch` handler2
             --   return $ Just (rbs, mr, Tup' [])
             Tup' (Str' x:xs) -> do
-              file <- openBinaryFile (unwords $ argify r) AppendMode
+              file <- openBinaryFile (T.unpack $ T.unwords $ argify r) AppendMode
               args <- argIO xs
-              (_, _, _, ph) <- createProcess (proc x args) {std_out = UseHandle file}
+              (_, _, _, ph) <- createProcess (proc (T.unpack x) (map T.unpack args)) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
             Pth' x -> do
-              file <- openBinaryFile (unwords $ argify r) AppendMode
+              file <- openBinaryFile (T.unpack $ T.unwords $ argify r) AppendMode
               (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
             Tup' (Pth' x:xs) -> do
-              file <- openBinaryFile (unwords $ argify r) AppendMode
+              file <- openBinaryFile (T.unpack $ T.unwords $ argify r) AppendMode
               args <- argIO xs
-              (_, _, _, ph) <- createProcess (proc x args) {std_out = UseHandle file}
+              (_, _, _, ph) <- createProcess (proc x (map T.unpack args)) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
             _ -> do
-              (appendFile (unwords (argify r)) (show l)) `catch` handler
+              (appendFile (T.unpack $ T.unwords (argify r)) (show l)) `catch` handler
               return $ Just (rbs, mr, Tup' [])
   where
     handler :: IOError -> IO ()
     handler e = do
-        putStrLn $ "here: " ++ show e
+        T.putStrLn $ "here: " `T.append` T.show e
         return ()
     handler2 :: IOError -> IO ExitCode
     handler2 e = do
-        putStrLn $ "here: " ++ show e
+        T.putStrLn $ "here: " `T.append` T.show e
         return $ ExitFailure 1
   --       Just (rbs, mr, r) -> do
   --         lout <- cap l
@@ -834,7 +826,8 @@ len gbs _ mem lhs rhs =
           Flt'   b -> return $ Just (rbs, mr, Int' $ toInteger $ length $ show b)
           Arr' _ b -> return $ Just (rbs, mr, Int' $ toInteger $ length b)
           Tup'   b -> return $ Just (rbs, mr, Int' $ toInteger $ length b)
-          Pth'   b -> return $ Just (rbs, mr, Int' $ toInteger $ length $ pieces (== '/') b)
+          -- TODO change this and all other variations to just filter (== '/') or something
+          Pth'   b -> return $ Just (rbs, mr, Int' $ toInteger $ length $ pieces (== '/') (T.pack b))
           _        -> return Nothing
   else
     return Nothing
@@ -885,7 +878,7 @@ range gbs _ mem lhs rhs = do
                     let fcycle = cycle files
                     return $ Just (rbs, mr, Arr' Tpth $ map (Pth') (takeWhile (/= b) (dropWhile (/= a) fcycle)))
                   else do
-                    putStrLn $ "Directory " ++ a ++ " does not exist."
+                    T.putStrLn $ "Directory " `T.append` T.pack a `T.append` " does not exist."
                     return Nothing
                 else return Nothing                  
             (Tup' [], Pth' b) -> return $ Just (rbs, mr, Pth' $ ".." ++ b)
@@ -908,7 +901,7 @@ input gbs _ mem lhs rhs = do
       case right of
         Nothing -> return Nothing
         Just (rbs, mr, r) -> do
-          line <- getLine
+          line <- T.getLine
           case (l, r) of
             (Tup' [], Tup' []) -> return $ Just (rbs, mr, Str' line)
             _ -> return Nothing
@@ -1148,7 +1141,7 @@ flt gbs _ mem lhs rhs = do
               )
             (Tup' [], Chr' b) -> return $ Just (rbs, mr, Flt' $ (fromIntegral . C.ord) b)
             (Tup' [], Str' b) ->
-              case readMaybe b of
+              case fltMaybe b of
                 Nothing -> return Nothing
                 Just f -> return $ Just (rbs, mr, Flt' f)
             _                 -> return Nothing
@@ -1226,7 +1219,7 @@ chr gbs _ mem lhs rhs = do
                     False -> 'F'
               )
             (Tup' [], Chr' _) -> return $ Just (rbs, mr, r)
-            (Tup' [], Str' [b]) -> return $ Just (rbs, mr, Chr' b)
+            (Tup' [], Str' (b T.:< T.Empty)) -> return $ Just (rbs, mr, Chr' b)
             _                 -> return Nothing
 
 typ :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
@@ -1268,8 +1261,8 @@ str gbs _ mem lhs rhs = do
           case l of
             Tup' [] ->
               case r of
-                Arr' Tchr cs -> return $ Just (rbs, mr, Str' (chr2str cs))
-                _ -> return $ Just (rbs, mr, Str' $ show $ vCollapse r)
+                Arr' Tchr cs -> return $ Just (rbs, mr, Str' (T.pack $ chr2str cs))
+                _ -> return $ Just (rbs, mr, Str' $ T.show $ vCollapse r)
             _       -> return Nothing
     where
       chr2str [] = []
@@ -1295,7 +1288,7 @@ pth gbs _ mem lhs rhs = do
         Nothing -> return Nothing
         Just (rbs, mr, r) ->
           case (l, r) of
-            (Tup' [], Str' b) -> return $ Just (rbs, mr, Pth' b)
+            (Tup' [], Str' b) -> return $ Just (rbs, mr, Pth' $ T.unpack b)
             (Tup' [], Pth' _) -> return $ Just (rbs, mr, r)
             (Tup' [], Arr' Tstr b) -> return $ Just (rbs, mr, Pth' (intercalate "/" $ map (show) b))
             _       -> return Nothing
@@ -1416,9 +1409,9 @@ frl gbs etp mem lhs rhs = do
                   (whl ibs etp im (Expression 0 "," (Operand expression) inc) pdc) >>=
                   (\out -> case out of {Nothing -> return Nothing; Just (obs, om, ov) -> return $ Just (obs, drop 1 om, ov)})
             _ ->
-              (putStrLn $ "Invalid for loop syntax at `" ++ show (parse mem predicate) ++ "`.")
+              (T.putStrLn $ "Invalid for loop syntax at `" `T.append` T.show (parse mem predicate) `T.append` "`.")
               >>= (\_ -> return Nothing)
-        _ -> (putStrLn $ "Invalid for loop syntax at `" ++ show rhs ++ "`.") >>= (\_ -> return Nothing)
+        _ -> (T.putStrLn $ "Invalid for loop syntax at `" `T.append` T.show rhs `T.append` "`.") >>= (\_ -> return Nothing)
     _ -> do
       case rhs of
         Expression _ "," (Expression _ "," ini pdc) inc -> do
@@ -1429,7 +1422,7 @@ frl gbs etp mem lhs rhs = do
               (whl ibs etp im (Expression 0 "," lhs inc) pdc) >>=
               (\out -> case out of {Nothing -> return Nothing; Just (obs, om, ov) -> return $ Just (obs, drop 1 om, ov)})
         _ ->
-          (putStrLn $ "Invalid for loop syntax at `" ++ show rhs ++ "`.")
+          (T.putStrLn $ "Invalid for loop syntax at `" `T.append` T.show rhs `T.append` "`.")
           >>= (\_ -> return Nothing)
 
 -- Deals with foreach (variable, list of values) loops.
@@ -1536,31 +1529,31 @@ var gbs etp mem lhs rhs =
         if not $ hasTany etp
         then return $ Just (gbs, insertBlankVar vname etp mem, Str' vname)
         else
-          (putStrLn $ "Can't defer the type of the let operation's assigned value. Type signature given is `" ++ show etp ++ "`.") >>=
+          (T.putStrLn $ "Can't defer the type of the let operation's assigned value. Type signature given is `" `T.append` T.show etp `T.append` "`.") >>=
           \_ -> return Nothing
       Operand (Tup [Typ tin, Wrd vname]) ->
         if tin == etp || etp == Tany
         then return $ Just (gbs, insertBlankVar vname etp mem, Str' vname)
         else
-          (putStrLn $ "Let statement with defined type `" ++ show tin ++ "` does not match the derived type on the right `" ++ show etp ++ "`.") >>=
+          (T.putStrLn $ "Let statement with defined type `" `T.append` T.show tin `T.append` "` does not match the derived type on the right `" `T.append` T.show etp `T.append` "`.") >>=
           \_ -> return Nothing
       Operand (Tup [tin, Wrd vname]) ->
         if compoundType tin == Just etp || etp == Tany
         then return $ Just (gbs, insertBlankVar vname etp mem, Str' vname)
         else
-          (putStrLn $ "Let statement with defined type `" ++ show tin ++ "` does not match the derived type on the right `" ++ show etp ++ "`.") >>=
+          (T.putStrLn $ "Let statement with defined type `" `T.append` T.show tin `T.append` "` does not match the derived type on the right `" `T.append` T.show etp `T.append` "`.") >>=
           \_ -> return Nothing
       -- Catching variables already defined.
       Operand (Var vname) -> var gbs etp mem lhs (Operand (Wrd vname))
       Operand (Tup [Typ tin, Var vname]) -> var gbs etp mem lhs (Operand (Tup [Typ tin, Wrd vname]))
       Operand (Tup [tin, Var vname]) -> var gbs etp mem lhs (Operand (Tup [tin, Wrd vname]))
-      _ -> (putStrLn $ "Let statement can't parse right-hand side `" ++ show rhs ++ "`") >>= \_ -> return Nothing
-  else (putStrLn "Let statement's left-hand side is not empty.") >>= \_ -> return Nothing
+      _ -> (T.putStrLn $ "Let statement can't parse right-hand side `" `T.append` T.show rhs `T.append` "`") >>= \_ -> return Nothing
+  else (T.putStrLn "Let statement's left-hand side is not empty.") >>= \_ -> return Nothing
 
 opr :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
-opr _ _ mem _ _ =
-  putStrLn "The current implementation of Turtle Shell Scripting Language does not allow for operation declaration without definition yet." >>=
-  \_ -> putStrLn (show (map (M.filter (\x -> case x of Op _ _ -> True ; _ -> False)) mem)) >>=
+opr _ _ _ _ _ =
+  T.putStrLn "The current implementation of Turtle Shell Scripting Language does not allow for operation declaration without definition yet." >>=
+  -- \_ -> putStrLn (show (map (M.filter (\x -> case x of Op _ _ -> True ; _ -> False)) mem)) >>=
   \_ -> return Nothing
 
 -- Eval right, then check left if it needs evaluation, if it doesn't then check type of left, then assign (or not).
@@ -1568,6 +1561,10 @@ opr _ _ mem _ _ =
 asn :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
 asn gbs _ mem lhs rhs = do
   case lhs of
+    -- Implement hole
+    Operand (Wrd "_") ->
+      interpret gbs Tany mem rhs >>=
+      \_ -> return $ Just (gbs, mem, Tup' [])
     -- To catch things already defined.
     Operand (Var vname) -> asn gbs Tany mem (Operand (Wrd vname)) rhs
     Operand (Opr _ vname) -> asn gbs Tany mem (Operand (Wrd vname)) rhs
@@ -1589,7 +1586,7 @@ asn gbs _ mem lhs rhs = do
                     -- putStrLn $ show $ map (M.filter (\d -> case d of {Op _ _ -> False; Val _ -> True;})) (updateVar vname r mr)
                     return $ Just (rbs, updateVar vname r mr, Tup' [])
                   else do
-                    putStrLn $ "Can't assign a value of type `" ++ show (val2typ r) ++ "` to variable `" ++ vname ++ "` of type `" ++  show t ++ "`"
+                    T.putStrLn $ "Can't assign a value of type `" `T.append` T.show (val2typ r) `T.append` "` to variable `" `T.append` vname `T.append` "` of type `" `T.append` T.show t `T.append` "`"
                     return Nothing
                 Right x ->
                   if val2typ x == val2typ r
@@ -1598,10 +1595,10 @@ asn gbs _ mem lhs rhs = do
                     -- putStrLn $ show $ map (M.filter (\d -> case d of {Op _ _ -> False; Val _ -> True;})) (updateVar vname r mr)
                     return $ Just (rbs, updateVar vname r mr, Tup' [])
                   else do
-                    putStrLn $ "Can't assign a value of type `" ++ show (val2typ r) ++ "` to variable `" ++ vname ++ "` of type `" ++ show (val2typ x) ++ "`"
+                    T.putStrLn $ "Can't assign a value of type `" `T.append` T.show (val2typ r) `T.append` "` to variable `" `T.append` vname `T.append` "` of type `" `T.append` T.show (val2typ x) `T.append` "`"
                     return Nothing
             _ -> do
-              putStrLn $ "Can't assign `" ++ show r ++ "` to  variable `" ++ vname ++ "`."
+              T.putStrLn $ "Can't assign `" `T.append` T.show r `T.append` "` to  variable `" `T.append` vname `T.append` "`."
               return Nothing
     Expression _ "let" llet rlet -> do
       right <-
@@ -1628,7 +1625,7 @@ asn gbs _ mem lhs rhs = do
           typish :: Token -> Bool
           typish tok = if compoundType tok == Nothing then False else True
           -- This one doesn't check for invalid things yet. (stuff that aren't types or names)
-          splitOp :: [Token] -> Maybe ([Token], String, [Token])
+          splitOp :: [Token] -> Maybe ([Token], T.Text, [Token])
           -- splitOp (Wrd left:Wrd opname:right) = Just ([Wrd left], opname, right)
           -- splitOp (Var left:Wrd opname:right) = Just ([Wrd left], opname, right)
           splitOp (Wrd opname:right) = Just ([], opname, right)
@@ -1686,7 +1683,7 @@ asn gbs _ mem lhs rhs = do
                   _ -> Nothing
           tok2pair [] = Just (VarGroup [], Ttup [])
           tok2pair _ = Nothing
-          zipName :: VarTree -> Type -> [(String, Data)]
+          zipName :: VarTree -> Type -> [(T.Text, Data)]
           zipName vt t =
             case vt of
               VarName vn -> [(vn, Val $ Left t)]
@@ -1697,13 +1694,13 @@ asn gbs _ mem lhs rhs = do
           -- Creates new expression tree from a fake memory used only for parsing
           -- the tree with the operator name in scope.
           -- Used if the operator doesn't already exist.
-          newrhs :: Word8 -> String -> Expression
-          newrhs rank opname =
-            parse
-            (
-              insertMem opname (Op rank (M.empty, Nothing)) mem
-            )
-            (flatten rhs)
+          -- newrhs :: Word8 -> String -> Expression
+          -- newrhs rank opname =
+          --   parse
+          --   (
+          --     insertMem opname (Op rank (M.empty, Nothing)) mem
+          --   )
+          --   (flatten rhs)
         -- case exp2typ mem rhs of
         --   Nothing -> return Nothing
         --   Just t ->
@@ -1713,9 +1710,9 @@ asn gbs _ mem lhs rhs = do
             case getMem mem opname of
               -- do not insert duplicate operator data
               Just (Op rank _) ->
-                case exp2typ mem (newrhs rank opname) of
+                case exp2typ mem (rhs) of
                   Nothing -> do
-                    putStrLn $ "Can't derive the type of the defined operator `" ++ opname ++ "`."
+                    T.putStrLn $ "Can't derive the type of the defined operator `" `T.append` opname `T.append` "`."
                     return Nothing
                   Just t ->
                     return $ Just
@@ -1740,12 +1737,12 @@ asn gbs _ mem lhs rhs = do
                       Tup' []
                     )
               _ -> do
-                putStrLn $ "Operator named `" ++ opname ++ "` does not exist, but is marked as an operator by the tokenizer."
+                T.putStrLn $ "Operator named `" `T.append` opname `T.append` "` does not exist, but is marked as an operator by the tokenizer."
                 return Nothing
           Operand (Wrd opname) ->
-            case exp2typ mem (newrhs 17 opname) of
+            case exp2typ mem (rhs) of
               Nothing -> do
-                putStrLn $ "Can't derive the type of the defined operator `" ++ opname ++ "`."
+                T.putStrLn $ "Can't derive the type of the defined operator `" `T.append` opname `T.append` "`."
                 return Nothing
               Just t ->
                 return $ Just
@@ -1760,7 +1757,7 @@ asn gbs _ mem lhs rhs = do
                       (
                         Defined
                         (fromIntegral $ length mem)
-                        (VarGroup [VarGroup [], VarGroup []], newrhs 17 opname)
+                        (VarGroup [VarGroup [], VarGroup []], rhs)
                         t
                       )
                       (M.empty, Nothing)
@@ -1770,9 +1767,9 @@ asn gbs _ mem lhs rhs = do
                   Tup' []
                 )
           Operand (Tup [Int rank, Wrd opname]) ->
-            case exp2typ mem (newrhs (fromInteger rank) opname) of
+            case exp2typ mem (rhs) of
               Nothing -> do
-                putStrLn $ "Can't derive the type of the defined operator `" ++ opname ++ "`."
+                T.putStrLn $ "Can't derive the type of the defined operator `" `T.append` opname `T.append` "`."
                 return Nothing
               Just t ->
                 return $ Just
@@ -1787,7 +1784,7 @@ asn gbs _ mem lhs rhs = do
                       (
                         Defined
                         (fromIntegral $ length mem)
-                        (VarGroup [VarGroup [], VarGroup []], newrhs (fromInteger rank) opname)
+                        (VarGroup [VarGroup [], VarGroup []], rhs)
                         t
                       )
                       (M.empty, Nothing)
@@ -1800,7 +1797,7 @@ asn gbs _ mem lhs rhs = do
           Operand (Tup (Int rank:ts)) ->
             case splitOp ts of
               Nothing -> do
-                putStrLn $ "Can't parse the inputs of the defined operator `" ++ show (Tup ts) ++ "`."
+                T.putStrLn $ "Can't parse the inputs of the defined operator `" `T.append` T.show (Tup ts) `T.append` "`."
                 return Nothing
               Just (l, s, r) -> do
                 -- DEBUG
@@ -1810,9 +1807,9 @@ asn gbs _ mem lhs rhs = do
                     case getMem mem s of
                       -- do not insert duplicate operator data
                       Nothing ->
-                        case exp2typ (M.fromList (zipName (vtCollapse $ VarGroup [ln, rn]) (tCollapse $ Ttup [lt, rt])):mem) (newrhs (fromInteger rank) s) of
+                        case exp2typ (M.fromList (zipName (vtCollapse $ VarGroup [ln, rn]) (tCollapse $ Ttup [lt, rt])):mem) (rhs) of
                           Nothing -> do
-                            putStrLn $ "Can't derive the type of the defined operator `" ++ show (Tup ts) ++ "`."
+                            T.putStrLn $ "Can't derive the type of the defined operator `" `T.append` T.show (Tup ts) `T.append` "`."
                             return Nothing
                           Just t ->
                             return $ Just
@@ -1827,7 +1824,7 @@ asn gbs _ mem lhs rhs = do
                                   (
                                     Defined
                                     (fromIntegral $ length mem)
-                                    (vtCollapse $ VarGroup [ln, rn], newrhs (fromInteger rank) s)
+                                    (vtCollapse $ VarGroup [ln, rn], rhs)
                                     t
                                   )
                                   (M.empty, Nothing)
@@ -1837,15 +1834,15 @@ asn gbs _ mem lhs rhs = do
                               Tup' []
                             )
                       _ ->
-                        (putStrLn $ "Binding for operation named `" ++ s ++ "` already exists.") >>=
+                        (T.putStrLn $ "Binding for operation named `" `T.append` s `T.append` "` already exists.") >>=
                         \_ -> return Nothing
                   _ ->
-                    (putStrLn $ "Can't parse operator names/types in declaration `" ++ show ts ++ "`.") >>=
+                    (T.putStrLn $ "Can't parse operator names/types in declaration `" `T.append` T.show ts `T.append` "`.") >>=
                     \_ -> return  Nothing
           Operand (Tup ts) ->
             case splitOp ts of
               Nothing -> do
-                putStrLn $ "Can't parse the inputs of the defined operator `" ++ show (Tup ts) ++ "`."
+                T.putStrLn $ "Can't parse the inputs of the defined operator `" `T.append` T.show (Tup ts) `T.append` "`."
                 return Nothing
               Just (l, s, r) ->
                 case (tok2pair l, tok2pair r) of
@@ -1853,9 +1850,9 @@ asn gbs _ mem lhs rhs = do
                     case getMem mem s of
                       -- do not insert duplicate operator data
                       Just (Op rank _) ->
-                        case exp2typ (M.fromList (zipName (vtCollapse $ VarGroup [ln, rn]) (tCollapse $ Ttup [lt, rt])):mem) (newrhs 17 s) of
+                        case exp2typ (M.fromList (zipName (vtCollapse $ VarGroup [ln, rn]) (tCollapse $ Ttup [lt, rt])):mem) (rhs) of
                           Nothing -> do
-                            putStrLn $ "Can't derive the output type of the operator `" ++ s ++ "` being defined."
+                            T.putStrLn $ "Can't derive the output type of the operator `" `T.append` s `T.append` "` being defined."
                             return Nothing
                           Just t ->
                             return $ Just
@@ -1870,7 +1867,7 @@ asn gbs _ mem lhs rhs = do
                                   (
                                     Defined
                                     (fromIntegral $ length mem)
-                                    (vtCollapse $ VarGroup [ln, rn], newrhs 17 s)
+                                    (vtCollapse $ VarGroup [ln, rn], rhs)
                                     t
                                   )
                                   (getTopOpMap mem s)
@@ -1882,7 +1879,7 @@ asn gbs _ mem lhs rhs = do
                       Nothing ->
                         case exp2typ (M.fromList (zipName (vtCollapse $ VarGroup [ln, rn]) (tCollapse $ Ttup [lt, rt])):mem) rhs of
                           Nothing -> do
-                            putStrLn $ "Can't derive the output type of the operator `" ++ s ++ "` being defined."
+                            T.putStrLn $ "Can't derive the output type of the operator `" `T.append` s `T.append` "` being defined."
                             return Nothing
                           Just t ->
                             return $ Just
@@ -1897,7 +1894,7 @@ asn gbs _ mem lhs rhs = do
                                   (
                                     Defined
                                     (fromIntegral $ length mem)
-                                    (vtCollapse $ VarGroup [ln, rn], newrhs 17 s)
+                                    (vtCollapse $ VarGroup [ln, rn], rhs)
                                     t
                                   )
                                   (M.empty, Nothing)
@@ -1907,21 +1904,21 @@ asn gbs _ mem lhs rhs = do
                               Tup' []
                             )
                       _ ->
-                        (putStrLn $ "Binding for operation named `" ++ s ++ "` already exists as a variable.") >>=
+                        (T.putStrLn $ "Binding for operation named `" `T.append` s `T.append` "` already exists as a variable.") >>=
                         \_ -> return Nothing
                   _ ->
-                    (putStrLn $ "Can't parse operator names/types in declaration `" ++ show ts ++ "`.") >>=
+                    (T.putStrLn $ "Can't parse operator names/types in declaration `" `T.append` T.show ts `T.append` "`.") >>=
                     \_ -> return  Nothing
           expr@(Expression _ _ _ _)  ->
             asn gbs Tany mem (Expression 4 "opr" (Operand $ Tup []) (Operand $ Tup $ flatten expr)) rhs
           _ ->
-            (putStrLn $ "Operator construction can't be parsed.") >>=
+            (T.putStrLn $ "Operator construction can't be parsed.") >>=
             \_ -> return Nothing
       else
-        putStrLn "Opr statement's left-hand side is not empty." >>=
+        T.putStrLn "Opr statement's left-hand side is not empty." >>=
         \_ -> return Nothing
     _ -> do
-      putStrLn "Bad syntax on `=` operator."
+      T.putStrLn "Bad syntax on `=` operator."
       return Nothing
 
 -- Unsure if I should use cap or cmd here. I used cap so it would be able to be used like $()

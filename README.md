@@ -166,7 +166,9 @@ Base Operators:
     * \* -- Duplicates the structure by a specified number of times. `[a1 a2 a3] * 3 -> [a1 a2 a3 a1 a2 a3 a1 a2 a3]`
     * / -- Divides the structure into a specified number of parts equally. Rounded to the nearest number. `"Hello World"/4 -> ["Hel" "lo " "Wor" "ld"]`
     * len -- Returns the length of the structure. `len [1..10] -> 10`
-    * . -- accesses the structure. Can be done with either a number or an array. `let arr = [[1 2 3] [4 5 6] [7 8 9]], echo arr.2.[1 2] #8 9`
+    * : (or !!) -- accesses the structure (or string). Can be done with either an integer or an array of integers.\
+           I had to use : instead of . or [_] because . is way too common, and [_] might be confused for a double of two arrays.\
+           `let arr = [[1 2 3] [4 5 6] [7 8 9]], echo arr:2:[1 2] #8 9`
     * [a..b] -- creates a range of numbers or "enumerable" types, incremented by its version of 1.
 * Flow
     * if -- Executes the following tuple depending on if the boolean statement returns true. `if **truth statement** {...}`
@@ -211,7 +213,7 @@ Base Operators:
       ```
       Note that there is a special variadic type `Any` that consumes all input into a tuple.
       ```
-      opr addall (...) nums = ( let acc = 0, for num in nums (if typ num == int || typ num == flt (acc = acc + num)), return acc)
+      opr addall Any nums = ( let acc = 0, for num in nums (if typ num == int || typ num == flt (acc = acc + num)), return acc)
       addall 1 2 3 4 5 #15
       ```
       It is quite error-prone. So use it carefully.
@@ -247,7 +249,7 @@ Bottom level - Closure
 255 - IO
 254 - cmd $
 17 - User-defined operators
-16 - .
+16 - :
 15 - type-casts
 14 - len
 13 - multiplication and division
@@ -278,5 +280,7 @@ With the lack of error handling (until structs and enums are added), error messa
 Changes made are not reverted.\
 Currently, all values are passed as copies in operations. This may lead to more memory usage,\
 but I already said it would be slow and heavy, so I'm not bothering to change it.\
-closures should capture the stdout (and stderr) of the commands executed into strings.
+closures should capture the stdout (and stderr) of the commands executed into strings.\
+The language aims to be strongly typed, but due to the lack of generics\
+(and knowledge of how to generate types for the "," operator), it is currently weakly typed.
 ___

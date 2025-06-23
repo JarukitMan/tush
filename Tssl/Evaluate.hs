@@ -6,6 +6,8 @@ import System.Directory
 import qualified Data.Map as M
 import Misc
 import Data.Maybe
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
 -- import System.Directory
 -- import System.IO
 
@@ -19,9 +21,9 @@ interpret :: Bool -> Type -> Memory -> Expression -> IO (Maybe (Bool, Memory, Va
 interpret b t mem (Expression _ opr left right) =
   case getMem mem opr of
     Nothing -> do
-      putStrLn $ "Operator `" ++ opr ++ "` not defined"
-      -- putStrLn $ "Expression: " ++ show expr
-      -- putStrLn $ "Memory: " ++ show mem
+      T.putStrLn $ "Operator `" `T.append` opr `T.append` "` not defined"
+      -- putStrLn $ "Expression: " `T.append` show expr
+      -- putStrLn $ "Memory: " `T.append` show mem
       return Nothing
     Just dat ->
       case dat of
@@ -31,12 +33,12 @@ interpret b t mem (Expression _ opr left right) =
         Op _ opmap -> do
           -- case exp2typ mem left of
           --   Nothing -> do
-          --     putStrLn $ "Can't infer the type of operation `" ++ opr ++ "`'s left-hand side at `" ++ show left ++ show opr ++ show right ++ "`."
+          --     putStrLn $ "Can't infer the type of operation `" `T.append` opr `T.append` "`'s left-hand side at `" `T.append` show left `T.append` show opr `T.append` show right `T.append` "`."
           --     return Nothing
           --   Just lefts ->
           --     case exp2typ mem right of
           --       Nothing -> do
-          --         putStrLn $ "Can't infer the type of operation `" ++ opr ++ "`'s right-hand side at `" ++ show left ++ show opr ++ show right ++ "`."
+          --         putStrLn $ "Can't infer the type of operation `" `T.append` opr `T.append` "`'s right-hand side at `" `T.append` show left `T.append` show opr `T.append` show right `T.append` "`."
           --         return Nothing
           --       Just rights ->
                   let
@@ -44,9 +46,9 @@ interpret b t mem (Expression _ opr left right) =
                     rights = fromMaybe Tany (exp2typ mem right)
                   case (tCollapse lefts, tCollapse rights) `lookupOp` opmap of
                     Nothing -> do
-                      putStrLn $
-                        "Operator `" ++ opr ++ "` does not contain a variation that accepts type "
-                        ++ show lefts ++ " and " ++ show rights
+                      T.putStrLn $
+                        "Operator `" `T.append` opr `T.append` "` does not contain a variation that accepts type "
+                        `T.append` T.show lefts `T.append` " and " `T.append` T.show rights
                       return Nothing
                     Just (Base opfun _) -> do
                       bout <- opfun b t mem left right
@@ -82,12 +84,12 @@ interpret b _ mem (Operand x) =
           case dat of
             Val (Right val) -> return $ Just (b, mem, val)
             Val (Left  typ) -> do
-              putStrLn $ "Variable of type `" ++ show typ ++ "` does not have a value assigned to it."
+              T.putStrLn $ "Variable of type `" `T.append` T.show typ `T.append` "` does not have a value assigned to it."
               return Nothing
             -- Realistically, this case should only ever happen when a function doesn't accept any input itself. So.
             -- Op r _ -> interpret b Tany mem (Expression r wrd (Operand $ Tup []) (Operand $ Tup []))
             Op _ _ -> do
-              putStrLn $ "Evaluation Error: Operator `" ++ wrd ++ "`found at bottom level."
+              T.putStrLn $ "Evaluation Error: Operator `" `T.append` wrd `T.append` "`found at bottom level."
               return Nothing
         Nothing -> return $ Just (b, mem, Str' wrd)
     Var var ->
@@ -96,16 +98,16 @@ interpret b _ mem (Operand x) =
           case dat of
             Val (Right val) -> return $ Just (b, mem, val)
             Val (Left  typ) -> do
-              putStrLn $ "Variable of type `" ++ show typ ++ "` does not have a value assigned to it."
+              T.putStrLn $ "Variable of type `" `T.append` T.show typ `T.append` "` does not have a value assigned to it."
               return Nothing
             Op _ _ -> do
-              putStrLn  $ "Evaluation Error: Operator `" ++ var ++ "` stored as a variable name."
+              T.putStrLn $ "Evaluation Error: Operator `" `T.append` var `T.append` "` stored as a variable name."
               return Nothing
         Nothing -> do
-          putStrLn  $ "Variable `" ++ var ++ "` not found in scope."
+          T.putStrLn $ "Variable `" `T.append` var `T.append` "` not found in scope."
           return Nothing
     Opr _ opr -> do
-      putStrLn  $ "Evaluation Error: Operator `" ++ opr ++ "`found at bottom level."
+      T.putStrLn $ "Evaluation Error: Operator `" `T.append` opr `T.append` "`found at bottom level."
       return Nothing
     Int int -> return $ Just (b, mem, Int' int)
     Flt flt -> return $ Just (b, mem, Flt' flt)
@@ -127,7 +129,7 @@ interpret b _ mem (Operand x) =
       ar <- handletup arr
       case ar of
         Nothing -> do
-          putStrLn $ "Array `" ++ show x ++ "` cannot be evaluated."
+          T.putStrLn $ "Array `" `T.append` T.show x `T.append` "` cannot be evaluated."
           return Nothing
         Just (b', mem', arr') -> do
           let arrtypes = map val2typ (map vCollapse arr') 
@@ -137,49 +139,49 @@ interpret b _ mem (Operand x) =
               Just typ -> return $ Just (b', mem', Arr' typ  (map vCollapse arr'))
               Nothing  -> return $ Just (b', mem', Arr' Tany (map vCollapse arr')) 
           else do
-            putStrLn $ "Array `" ++ show x ++ "`'s member types do not match."
+            T.putStrLn $ "Array `" `T.append` T.show x `T.append` "`'s member types do not match."
             return Nothing
     Tup tup   -> do
       tp <- handletup tup
       case tp of
         Nothing   -> do
-          putStrLn $ "Tuple `" ++ show x ++ "` cannot be evaluated."
+          T.putStrLn $ "Tuple `" `T.append` T.show x `T.append` "` cannot be evaluated."
           return Nothing
         Just (b', mem', tup') -> return $ Just (b', mem', vCollapse $ Tup' tup')
     Fmt fmt   -> do
       fm <- handletup $ map (\a -> case a of {Left txt -> Tup [Str txt]; Right xpr -> xpr}) fmt
       case fm of
         Nothing   -> do
-          putStrLn $ "Formatted String `" ++ show x ++ "` cannot be evaluated."
+          T.putStrLn $ "Formatted String `" `T.append` T.show x `T.append` "` cannot be evaluated."
           return Nothing
         -- Just (mem', fmt') -> return $ Just (mem', Str' $ concat $ map show fmt')
         Just (b', mem', fmt') -> do
           fmt'' <- argIO (map vCollapse fmt')
-          return $ Just (b', mem', Str' $ concat $ (fmt''))
+          return $ Just (b', mem', Str' $ T.concat $ (fmt''))
     where
       handletup :: [Token] -> IO (Maybe (Bool, Memory, [Value]))
       handletup xs =
           if hasOp mem xs
           then do
             -- DEBUG
-            -- putStrLn $ "handling " ++ show (Tup xs)
+            -- putStrLn $ "handling " `T.append` show (Tup xs)
             -- tup <- ((interpret t $ newscope mem) . parse) xs
             tup <-
               case exp2typ mem (parse mem xs) of
                 Nothing -> do
-                  putStrLn $ "exp2typ failed to parse " ++ show xs ++ ". (before interpreting.)"
+                  T.putStrLn $ "exp2typ failed to parse " `T.append` T.show xs `T.append` ". (before interpreting.)"
                   -- DEBUG
-                  -- putStrLn $ "Expression: " ++ show (parse mem xs)
+                  -- putStrLn $ "Expression: " `T.append` show (parse mem xs)
                   return Nothing
                 Just typ -> do
                   -- DEBUG
-                  -- putStrLn $ "Output type is: " ++ show typ
+                  -- putStrLn $ "Output type is: " `T.append` show typ
                   ((interpret b typ $ newscope mem) . parse mem) xs
             case tup of
               Nothing -> do
-                putStrLn $ "exp2typ failed to parse " ++ show xs ++ "."
+                T.putStrLn $ "exp2typ failed to parse " `T.append` T.show xs `T.append` "."
                 -- DEBUG
-                -- putStrLn $ "Expression: " ++ show (parse mem xs)
+                -- putStrLn $ "Expression: " `T.append` show (parse mem xs)
                 return Nothing
               Just (b', m', Tup' tup') -> return $ Just (b', drop 1 m', (map vCollapse tup'))
               Just (b', m', val)       -> return $ Just (b', drop 1 m', [val])
@@ -196,22 +198,22 @@ interpret b _ mem (Operand x) =
                     Just (gb, m, ys) ->
                       case t of
                         Opr _ opr -> do
-                          putStrLn $ "Found operator " ++ opr ++ " where it's not supposed to be (after hasOp returns False.)"
+                          T.putStrLn $ "Found operator " `T.append` opr `T.append` " where it's not supposed to be (after hasOp returns False.)"
                           return Nothing
                         Var var ->
                           case getMem m var of
                             Nothing -> do
-                              putStrLn $ "Found variable " ++ var ++ ", which does not exist."
+                              T.putStrLn $ "Found variable " `T.append` var `T.append` ", which does not exist."
                               return Nothing
                             Just (Op _ _) -> do
-                              putStrLn $ "Found operator " ++ var ++ " where it's not supposed to be (after hasOp returns False.)"
+                              T.putStrLn $ "Found operator " `T.append` var `T.append` " where it's not supposed to be (after hasOp returns False.)"
                               return Nothing
                             Just (Val val) -> return $ Just (gb, m, val:ys)
                         Tup tup -> do
                           out <-
                             case exp2typ m (parse m tup) of
                               Nothing -> do
-                                putStrLn $ "exp2typ failed to parse " ++ show xs ++ ". (Nested)"
+                                T.putStrLn $ "exp2typ failed to parse " `T.append` T.show xs `T.append` ". (Nested)"
                                 return Nothing
                               Just typ -> ((interpret gb typ $ newscope m) . parse m) tup
                           case out of
@@ -238,7 +240,7 @@ interpret b _ mem (Operand x) =
                 case sequence resultR of
                   Right resultRightR -> return $ Just (b', mem', reverse resultRightR)
                   Left  errtype      -> do
-                    putStrLn $ "Some variable in tuple `" ++ show xs ++ "` of type `" ++ show errtype ++ "` does not contain a value."
+                    T.putStrLn $ "Some variable in tuple `" `T.append` T.show xs `T.append` "` of type `" `T.append` T.show errtype `T.append` "` does not contain a value."
                     return Nothing
                 
             -- return $ sequence thing
@@ -311,7 +313,7 @@ exp2typ mem ex@(Expression _ op left right) =
             Base _ t -> Just $ tCollapse t
             Defined _ _ t -> Just $ tCollapse t
 
-findName :: String -> Expression -> Maybe Expression
+findName :: T.Text -> Expression -> Maybe Expression
 findName name ex@(Expression _ op left right) =
   if op == name
   then Just ex

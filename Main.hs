@@ -5,6 +5,8 @@ import Tssl.Evaluate
 import Tssl.Operators
 import Misc
 import Data.Map
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Tssl.Parse
 import System.Directory
 import System.IO
@@ -17,7 +19,7 @@ main = do
   case arg1 of
     Just filename -> do
       -- putStrLn $ "\ESC[1;34m[ARGS]\ESC[0m\n" ++ (show args)
-      content <- readFile filename
+      content <- T.readFile filename
       -- putStrLn $ "\ESC[1;36m[CONTENT]\ESC[0m\n" ++ content
       -- putStrLn $ unlines (map (\x -> case tokenize x of Left err -> err ; Right tokens -> show tokens) (lines content))
       case tokenize initmem content of
@@ -40,9 +42,9 @@ main = do
               -- cmd out
               case out of
                 Tup' [] -> return ()
-                _ -> putStrLn $ show out
+                _ -> T.putStrLn $ T.show out
           return ()
-        Left  errmsg -> putStrLn $ "\ESC[1;31m[ERROR]\ESC[0m\n" ++ errmsg
+        Left  errmsg -> T.putStrLn $ "\ESC[1;31m[ERROR]\ESC[0m\n" `T.append` errmsg
     Nothing -> do
       _ <- mainLoop True initmem
       return ()
@@ -52,19 +54,27 @@ mainLoop :: Bool -> Memory -> IO (Bool, Memory)
 mainLoop gbs mem = do
   -- cwd  <- getCurrentDirectory
   prompt <- tempprompt
-  putStr prompt
+  T.putStr prompt
   hFlush stdout
-  line <- getLine
+  line <- T.getLine
   if not $ "exit" == line then do
     -- putStrLn $ "\ESC[1;33m[DIR]\ESC[0m\n" ++ cwd
-    case tokenize mem ('\n':line) of
-    -- case tokenize initmem line of
+    -- case tokenize mem ('\n':line) of
+    case tokenize initmem line of
       Right tokens -> do
         -- DEBUG
         -- putStrLn $ "\ESC[1;32m[TOKENS]\ESC[0m\n" ++ (show tokens)
         -- putStrLn $ "\ESC[1;32m[PARTS]\ESC[0m\n"  ++ (show $ bunch mem tokens)
         -- putStrLn $ "\ESC[1;32m[SENTENCE]\ESC[0m\n"  ++ ((show . parse mem) tokens)
-        result <- ((interpret gbs Tany mem) . parse mem) tokens
+        let
+          checkendline x =
+            case x of
+              Operand _          -> Expression 0 "," (Operand $ Tup []) x
+              Expression _ o _ _ ->
+                if o `elem` ["|", "&", "$", ",", "cmd"]
+                then x
+                else Expression 0 "," (Operand $ Tup []) x
+        result <- ((interpret gbs Tany mem) . (checkendline) . parse mem) tokens
         case result of
           Just (nbs, newmem, out) -> do
             -- output <- cap out
@@ -82,20 +92,24 @@ mainLoop gbs mem = do
             mainLoop nbs newmem
           Nothing -> mainLoop gbs mem
       Left  errmsg -> do
-        putStrLn $ "\ESC[1;31m[ERROR]\ESC[0m\n" ++ errmsg
+        T.putStrLn $ "\ESC[1;31m[ERROR]\ESC[0m\n" `T.append` errmsg
         mainLoop gbs mem
   else
     return $ (gbs, mem)
 
 -- The actual thing will fetch from the config file.
 -- This is a placeholder function that doesn't actually exist.
-tempprompt :: IO String
+tempprompt :: IO T.Text
 tempprompt = do
   cwd <- getCurrentDirectory
-  case headMaybe (reverse $ pieces (== '/') cwd) of
-    Nothing -> return $ "\ESC[0m<|'w'|\ESC[33m*\ESC[0m> "
-    Just "" -> return $ "\ESC[0m<|'w'|\ESC[33m*\ESC[0m> "
-    Just path -> return $ "\ESC[0m<|" ++ path ++ "|\ESC[33m*\ESC[0m> "
+  case headMaybe (reverse $ pieces (== '/') (T.pack cwd)) of
+    Nothing -> return $ T.pack "\ESC[0m<|'w'|\ESC[33m*\ESC[0m> "
+    Just path ->
+      if T.null path
+      then
+        return $ T.pack "\ESC[0m<|'w'|\ESC[33m*\ESC[0m> "
+      else
+        return $ T.pack $ "\ESC[0m<|" ++ (T.unpack path) ++ "|\ESC[33m*\ESC[0m> "
 
 initmem :: Memory
 initmem =
@@ -290,7 +304,8 @@ initmem =
             insertOp (Tchr, Tchr) (Base range (Tarr Tchr)) $
             insertOp (Ttup [Tchr, Tchr], Tchr) (Base range (Tarr Tchr)) $
             insertOp (Tpth, Tpth) (Base range (Tarr Tpth)) $
-            insertOp (Ttup [], Tpth) (Base range (Tpth))
+            insertOp (Ttup [], Tpth) (Base range (Tpth)) $
+            insertOp (Ttup [], Ttup []) (Base range (Tpth))
             (empty, Nothing)
           )
         ),
@@ -437,15 +452,25 @@ initmem =
             (empty, Nothing)
           )
         ),
-        (".", Op 16
+        (":", Op 16
           (
-            insertOp (Tstr, Tstr) (Base dot Tstr) $
-            insertOp (Tany, Tarr Tint) (Base dot Tany) $
-            insertOp (Tany, Tint) (Base dot Tany) $
-            insertOp (Tint, Tint) (Base dot Tflt) $
-            insertOp (Tstr, Tint) (Base dot Tchr) $
-            insertOp (Tstr, Tarr Tint) (Base dot Tstr) $
-            insertOp (Tany, Tany) (Base dot Tany)
+            insertOp (Tstr, Tstr) (Base acs Tpth) $
+            insertOp (Tany, Tarr Tint) (Base acs Tany) $
+            insertOp (Tany, Tint) (Base acs Tany) $
+            insertOp (Tstr, Tint) (Base acs Tchr) $
+            insertOp (Tstr, Tarr Tint) (Base acs Tstr) $
+            insertOp (Tpth, Tstr) (Base acs Tpth)
+            (empty, Nothing)
+          )
+        ),
+        ("!!", Op 16
+          (
+            insertOp (Tstr, Tstr) (Base acs Tpth) $
+            insertOp (Tany, Tarr Tint) (Base acs Tany) $
+            insertOp (Tany, Tint) (Base acs Tany) $
+            insertOp (Tstr, Tint) (Base acs Tchr) $
+            insertOp (Tstr, Tarr Tint) (Base acs Tstr) $
+            insertOp (Tpth, Tstr) (Base acs Tpth)
             (empty, Nothing)
           )
         ),
