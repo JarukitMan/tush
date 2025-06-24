@@ -113,8 +113,8 @@ sub gbs etp mem lhs rhs = do
                 (Chr' a, Int' b)       -> Just $ Chr' $ C.chr $ (C.ord a) - (fromInteger b)
                 (Chr' a, Chr' b)       -> Just $ Chr' $ C.chr $ (C.ord a) - (C.ord b)
                 -- (Bln' a, Bln' b)       -> Just $ Bln' $ a && b
-                (Str' a, Int' b)       -> Just $ Str' $ T.take (fromInteger b) a
-                (Arr' t a, Int' b)       -> Just $ Arr' t $ take (fromInteger b) a
+                (Str' a, Int' b)       -> Just $ Str' $ T.take (T.length a - fromInteger b) a
+                (Arr' t a, Int' b)       -> Just $ Arr' t $ take (length a - fromInteger b) a
                 (Str' a, Chr' b)       -> Just $ Str' $ T.filter (/= b) a
                 (Str' a, Str' b)       -> Just $ Str' $ T.pack $ reverse $ takeDiff (reverse $ T.unpack a) (reverse $ T.unpack b)
                 (Arr' t1 a, Arr' t2 b) ->
@@ -1332,6 +1332,21 @@ ift gbs etp mem lhs rhs =
 els :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
 els gbs etp mem lhs rhs =
   case lhs of
+    Expression _ "if" lleft lright ->
+      if exp2typ mem lhs == exp2typ mem rhs || exp2typ mem lhs == Just Tany || exp2typ mem rhs == Just Tany
+      then do
+        left <- ift gbs etp mem lleft lright
+        case left of
+          Nothing -> return Nothing
+          Just (lbs, ml, l) -> 
+            if lbs
+            then return $ Just (lbs, ml, l)
+            else interpret lbs etp ml rhs
+      else
+        (T.putStrLn $ "Operator if/else (that are in the same line) "
+        `T.append` T.show lhs `T.append` " and " `T.append` T.show rhs `T.append`
+        " output types do not match.") >>=
+        \_ -> return Nothing
     Operand (Tup []) ->
       if not gbs
       then interpret gbs etp mem rhs
