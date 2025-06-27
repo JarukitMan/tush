@@ -19,7 +19,7 @@ import System.Directory
 import System.Process
 import System.IO
 import System.Exit
--- import System.Environment
+import System.Environment
 import Control.Exception
 import GHC.Float
 -- import Text.Read
@@ -441,6 +441,7 @@ next gbs etp mem lhs rhs = catch (do
                 -- Expression _ _ _ _ -> return r
                 -- Operand _ -> check r
               case l' of
+                Tup' [] -> return $ Just (rbs, mr, vCollapse $ Tup' [Tup' [], r'])
                 Tup' lt -> return $ Just (rbs, mr, vCollapse $ Tup' $ lt ++ [r'])
                 _       -> return $ Just (rbs, mr, vCollapse $ Tup' [l', r'])
     ) handler
@@ -1344,7 +1345,7 @@ els gbs etp mem lhs rhs =
             else interpret lbs etp ml rhs
       else
         (T.putStrLn $ "Operator if/else (that are in the same line) "
-        `T.append` T.show lhs `T.append` " and " `T.append` T.show rhs `T.append`
+        `T.append` T.show (flatten lhs) `T.append` " and " `T.append` T.show (flatten rhs) `T.append`
         " output types do not match.") >>=
         \_ -> return Nothing
     Operand (Tup []) ->
@@ -1378,13 +1379,23 @@ whl gbs etp mem lhs rhs =
                 iteration <- interpret True etp ml (Operand expression)
                 case iteration of
                   Nothing -> return Nothing
-                  Just (_, mr, Break) -> return $ Just (True, mr, Tup' [])
+                  Just (_, mr, Break) -> return $ Just (True, mr, Arr' Tany [])
                   Just (_, mr, r) -> do
                     final <- whl True etp mr lhs rhs
                     case final of
                       Nothing -> return Nothing
-                      Just (fbs, mf, Tup' f) -> return $ Just (fbs, mf, Tup' (r:f))
-                      Just (fbs, mf,      f) -> return $ Just (fbs, mf, Tup' [r, f])
+                      Just (fbs, mf, Arr' t f) ->
+                        if t == val2typ r
+                        then return $ Just (fbs, mf, Arr' t (r:f))
+                        else
+                          (T.putStrLn $ "While loop `" `T.append` T.show expression `T.append` " detected to have different output types.") >>=
+                          \_ -> return Nothing
+                      Just (fbs, mf, f) ->
+                        if val2typ f == val2typ r
+                        then return $ Just (fbs, mf, Arr' (val2typ r) [r, f])
+                        else
+                          (T.putStrLn $ "While loop `" `T.append` T.show expression `T.append` " detected to have different output types.") >>=
+                          \_ -> return Nothing
             Just (_, ml, Bln' False) -> return $ Just (False, ml, Tup' [])
             _                        -> return Nothing
         _ -> return Nothing
@@ -1407,8 +1418,20 @@ whl gbs etp mem lhs rhs =
                     final <- whl True etp ml lhs rhs
                     case final of
                       Nothing -> return Nothing
-                      Just (fbs, mf, Tup' f) -> return $ Just (fbs, mf, Tup' (l:f))
-                      Just (fbs, mf,      f) -> return $ Just (fbs, mf, Tup' [l, f])
+                      Just (fbs, mf, Arr' t f) ->
+                        if t == val2typ l
+                        then return $ Just (fbs, mf, Arr' t (l:f))
+                        else
+                          (T.putStrLn $ "While loop `" `T.append` T.show lhs `T.append` " detected to have different output types.") >>=
+                          \_ -> return Nothing
+                      Just (fbs, mf, f) ->
+                        if val2typ f == val2typ l
+                        then return $ Just (fbs, mf, Arr' (val2typ l) [l, f])
+                        else
+                          (T.putStrLn $ "While loop `" `T.append` T.show lhs `T.append` " detected to have different output types.") >>=
+                          \_ -> return Nothing
+                      -- Just (fbs, mf, Tup' f) -> return $ Just (fbs, mf, Tup' (l:f))
+                      -- Just (fbs, mf,      f) -> return $ Just (fbs, mf, Tup' [l, f])
         Just (_, mr, Bln' False) -> return $ Just (False, mr, Tup' [])
         _ -> return Nothing
 
@@ -1430,7 +1453,7 @@ frl gbs etp mem lhs rhs = do
             _ ->
               (T.putStrLn $ "Invalid for loop syntax at `" `T.append` T.show (parse mem predicate) `T.append` "`.")
               >>= (\_ -> return Nothing)
-        _ -> (T.putStrLn $ "Invalid for loop syntax at `" `T.append` T.show rhs `T.append` "`.") >>= (\_ -> return Nothing)
+        _ -> (T.putStrLn $ "Invalid for loop syntax at `" `T.append` T.show (flatten rhs) `T.append` "`.") >>= (\_ -> return Nothing)
     _ -> do
       case rhs of
         Expression _ "," (Expression _ "," ini pdc) inc -> do
@@ -1441,7 +1464,7 @@ frl gbs etp mem lhs rhs = do
               (whl ibs etp im (Expression 0 "," lhs inc) pdc) >>=
               (\out -> case out of {Nothing -> return Nothing; Just (obs, om, ov) -> return $ Just (obs, drop 1 om, ov)})
         _ ->
-          (T.putStrLn $ "Invalid for loop syntax at `" `T.append` T.show rhs `T.append` "`.")
+          (T.putStrLn $ "Invalid for loop syntax at `" `T.append` T.show (flatten rhs) `T.append` "`.")
           >>= (\_ -> return Nothing)
 
 -- Deals with foreach (variable, list of values) loops.
@@ -1485,7 +1508,13 @@ fre gbs _ mem lhs rhs =
               body' <- body
               case body' of
                 Nothing -> return Nothing
-                Just (b, m, vs) -> return $ Just (b, m, Tup' $ reverse vs)
+                Just (b, m, vs@(v:_)) ->
+                  if dupes (map val2typ vs)
+                  then return $ Just (b, m, Arr' (val2typ v) $ reverse vs)
+                  else
+                    (T.putStrLn $ "For each loop `" `T.append` T.show expression `T.append` "` found to have different output types.") >>=
+                    \_ -> return Nothing
+                Just (b, m, []) -> return $ Just (b, m, Arr' Tany $ [])
             _ -> return Nothing
         _ -> return Nothing
     _ -> do
@@ -1523,7 +1552,14 @@ fre gbs _ mem lhs rhs =
           body' <- body
           case body' of
             Nothing -> return Nothing
-            Just (b, m, vs) -> return $ Just (b, m, Tup' $ reverse vs)
+            -- Just (b, m, vs) -> return $ Just (b, m, Tup' $ reverse vs)
+            Just (b, m, vs@(v:_)) ->
+              if dupes (map val2typ vs)
+              then return $ Just (b, m, Arr' (val2typ v) $ reverse vs)
+              else
+                (T.putStrLn $ "For each loop `" `T.append` T.show lhs `T.append` "` found to have different output types.") >>=
+                \_ -> return Nothing
+            Just (b, m, []) -> return $ Just (b, m, Arr' Tany $ [])
         _ -> return Nothing
 
 brk :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
@@ -1566,7 +1602,7 @@ var gbs etp mem lhs rhs =
       Operand (Var vname) -> var gbs etp mem lhs (Operand (Wrd vname))
       Operand (Tup [Typ tin, Var vname]) -> var gbs etp mem lhs (Operand (Tup [Typ tin, Wrd vname]))
       Operand (Tup [tin, Var vname]) -> var gbs etp mem lhs (Operand (Tup [tin, Wrd vname]))
-      _ -> (T.putStrLn $ "Let statement can't parse right-hand side `" `T.append` T.show rhs `T.append` "`") >>= \_ -> return Nothing
+      _ -> (T.putStrLn $ "Let statement can't parse right-hand side `" `T.append` T.show (flatten rhs) `T.append` "`") >>= \_ -> return Nothing
   else (T.putStrLn "Let statement's left-hand side is not empty.") >>= \_ -> return Nothing
 
 opr :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
@@ -1957,6 +1993,84 @@ exe gbs _ mem lhs rhs =
       Just (rbs, mr, r) ->
         (cap r) >>=
         (\out -> return $ maybe Nothing (\x -> Just (rbs, mr, Str' x)) out)
-  else
-    return Nothing
+  else do
+  -- I just copied "with" and replaced cmd with cap.
+    left <- interpret gbs Tany mem lhs
+    case left of
+      Nothing -> return Nothing
+      Just (lbs, ml, Arr' (Ttup [Tstr, Tstr]) l) -> do
+        right <-
+          case exp2typ mem rhs of
+            Nothing -> return Nothing
+            Just t -> interpret lbs t ml rhs
+        case right of
+          Nothing -> return Nothing
+          Just (rbs, mr, r) -> do
+            oldenv <- getEnvironment
+            out <-
+              do
+                _ <-
+                  sequence $ map
+                  (
+                    \i ->
+                      case i of
+                        Tup' [Str' n, Str' v] -> setEnv (T.unpack n) (T.unpack v)
+                        _ -> return ()
+                  ) l
+                cap r
+              `catch`
+              (
+                \(e :: IOError) -> do
+                  T.putStrLn $ "with: " `T.append` T.show e
+                  return Nothing
+              )
+            _ <-
+              do
+                newenv <- getEnvironment
+                _ <- sequence $ map (\(n, _) -> unsetEnv n) newenv
+                _ <- sequence $ map (\(n, v) -> setEnv n v) oldenv
+                return ()
+              `catch`
+              (\(e :: IOError) -> T.putStrLn $ "with: " `T.append` T.show e)
+            return $ maybe Nothing (\x -> Just (rbs, mr, Str' x)) out
+      _ -> return Nothing
+    -- return Nothing
 
+-- Also highly inefficient.
+with :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
+with gbs _ mem lhs rhs = do
+  left <- interpret gbs Tany mem lhs
+  case left of
+    Nothing -> return Nothing
+    Just (lbs, ml, l) -> do
+      right <-
+        case exp2typ mem rhs of
+          Nothing -> return Nothing
+          Just t -> interpret lbs t ml rhs
+      case right of
+        Nothing -> return Nothing
+        Just (rbs, mr, Arr' (Ttup [Tstr, Tstr]) r) -> do
+          oldenv <- getEnvironment
+          _ <-
+            do
+              _ <-
+                sequence $ map
+                (
+                  \i ->
+                    case i of
+                      Tup' [Str' n, Str' v] -> setEnv (T.unpack n) (T.unpack v)
+                      _ -> return ()
+                ) r
+              cmd l
+            `catch`
+            (\(e :: IOError) -> T.putStrLn $ "with: " `T.append` T.show e)
+          _ <-
+            do
+              newenv <- getEnvironment
+              _ <- sequence $ map (\(n, _) -> unsetEnv n) newenv
+              _ <- sequence $ map (\(n, v) -> setEnv n v) oldenv
+              return ()
+            `catch`
+            (\(e :: IOError) -> T.putStrLn $ "with: " `T.append` T.show e)
+          return $ Just (rbs, mr, Tup' [])
+        _ -> return Nothing

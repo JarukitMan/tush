@@ -40,9 +40,15 @@ main = do
               -- the evaluation function. (the "," operation.)
               -- This means the real thing needs to get newlines too.
               -- cmd out
-              case out of
-                Tup' [] -> return ()
-                _ -> T.putStrLn $ T.show out
+              -- if emptish out
+              -- then return ()
+              -- else T.putStrLn $ T.show out
+              -- case out of
+              --   Tup' [] -> return ()
+              --   _ -> T.putStrLn $ T.show out
+              case (T.intercalate " " . argify) out of
+                "" -> return ()
+                output -> T.putStrLn output
           return ()
         Left  errmsg -> T.putStrLn $ "\ESC[1;31m[ERROR]\ESC[0m\n" `T.append` errmsg
     Nothing -> do
@@ -85,10 +91,16 @@ mainLoop gbs mem = do
             -- the evaluation function. (the "," operation.)
             -- This means the real thing needs to get newlines too.
             -- cmd out
-            case out of
-              Tup' [] -> return ()
-              -- Makeshift solution for the leftover () after all the operations.
-              _ -> putStrLn $ show out
+            -- if emptish out
+            -- then return ()
+            -- else T.putStrLn $ T.show out
+            case (T.intercalate " " . argify) out of
+              "" -> return ()
+              output -> T.putStrLn output
+            -- case out of
+            --   Tup' [] -> return ()
+            --   -- Makeshift solution for the leftover () after all the operations.
+            --   _ -> putStrLn $ show out
             mainLoop nbs newmem
           Nothing -> mainLoop gbs mem
       Left  errmsg -> do
@@ -194,18 +206,36 @@ initmem =
         ),
         ("for", Op 6
           (
+            insertOp (Tint, Tany) (Base range (Tarr Tint)) $
+            insertOp (Tflt, Tany) (Base range (Tarr Tflt)) $
+            insertOp (Tchr, Tany) (Base range (Tarr Tchr)) $
+            insertOp (Tstr, Tany) (Base range (Tarr Tstr)) $
+            insertOp (Tpth, Tany) (Base range (Tarr Tpth)) $
+            insertOp (Tbln, Tany) (Base range (Tarr Tbln)) $
             insertOp (Tany, Tany) (Base frl Tany)
             (empty, Nothing)
           )
         ),
         ("foreach", Op 6
           (
+            insertOp (Tint, Tany) (Base range (Tarr Tint)) $
+            insertOp (Tflt, Tany) (Base range (Tarr Tflt)) $
+            insertOp (Tchr, Tany) (Base range (Tarr Tchr)) $
+            insertOp (Tstr, Tany) (Base range (Tarr Tstr)) $
+            insertOp (Tpth, Tany) (Base range (Tarr Tpth)) $
+            insertOp (Tbln, Tany) (Base range (Tarr Tbln)) $
             insertOp (Tany, Tany) (Base fre Tany)
             (empty, Nothing)
           )
         ),
         ("while", Op 6
           (
+            insertOp (Tint, Tany) (Base range (Tarr Tint)) $
+            insertOp (Tflt, Tany) (Base range (Tarr Tflt)) $
+            insertOp (Tchr, Tany) (Base range (Tarr Tchr)) $
+            insertOp (Tstr, Tany) (Base range (Tarr Tstr)) $
+            insertOp (Tpth, Tany) (Base range (Tarr Tpth)) $
+            insertOp (Tbln, Tany) (Base range (Tarr Tbln)) $
             insertOp (Tany, Tany) (Base whl Tany)
             (empty, Nothing)
           )
@@ -477,13 +507,21 @@ initmem =
         -- Might bump to 255 later.
         ("$", Op 254
           (
+            insertOp (Tarr $ Ttup [Tstr, Tstr], Tany) (Base exe Tstr) $
             insertOp (Ttup [], Tany) (Base exe Tstr)
             (empty, Nothing)
           )
         ),
         ("cmd", Op 254
           (
+            insertOp (Tarr $ Ttup [Tstr, Tstr], Tany) (Base exe Tstr) $
             insertOp (Ttup [], Tany) (Base exe Tstr)
+            (empty, Nothing)
+          )
+        ),
+        ("with", Op 254
+          (
+            insertOp (Tany, Tarr $ Ttup [Tstr, Tstr]) (Base with $ Ttup [])
             (empty, Nothing)
           )
         ),

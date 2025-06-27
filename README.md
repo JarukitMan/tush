@@ -227,6 +227,9 @@ Base Operators:
 
     Pipers are basically whatever ; > >> <<< were in bash. I don't know their names.
     They should behave the same in which expressions that contain errors are skipped while the rest of the program is executed normally.
+* Executions
+    * cmd/$ -- Executes the command to the right with the env to the left and capture the stdout to a string instead of printing it.
+    * with -- executes the command to the left with the env to the right.
 
 #### Closures
 

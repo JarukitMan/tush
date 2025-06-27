@@ -106,6 +106,12 @@ data Value =
   Arr' Type [Value] | Tup' [Value] | Break -- | Sig' Signal
   deriving (Eq)
 
+emptish :: Value -> Bool
+emptish v =
+  case v of
+    Tup' [] -> True
+    Tup' vs -> and (map emptish vs)
+    _       -> False
 instance Ord Value where
   compare :: Value -> Value -> Ordering
   compare v1 v2 =

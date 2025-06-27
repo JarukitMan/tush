@@ -90,7 +90,7 @@ chunkify list@(x T.:< xs)
     else Left "Unclosed Left Array Delimiter \"[]\""
   |
   otherwise = do
-    let (front, back) = splitEsc (`T.elem` " \t\r\n,{}()[]:.\'|") list
+    let (front, back) = splitEsc (`T.elem` " \t\r\n,{}()[]:.|") list
     (rest, unchunked) <- chunkify back
     -- -- I'll just check for floats here screw it.
     case rest of
@@ -204,9 +204,13 @@ preprocess (FString tup:xs) = FString (preprocess tup):preprocess xs
 preprocess (Array tup:xs) = Array (preprocess tup):preprocess xs
 preprocess (Word "for":x@(Word _):Word "in":xs) =
       case splitWith (\t -> case t of {Tuple _ -> True ; _ -> False}) xs of
-        ([], _) -> x:preprocess xs
-        (_, []) -> x:preprocess xs
+        ([], rest) ->
+          case rest of
+            (Tuple y:back) -> Word "foreach":Tuple [x, Word ",", Tuple (preprocess y)]:preprocess back
+            _ -> Word "for":x:Word "in":preprocess xs
+        (_, []) -> Word "for":x:Word "in":preprocess xs
         (front, back) -> Word "foreach":Tuple [x, Word ",", Tuple (preprocess front)]:preprocess back
+preprocess (Word "for":Tuple (x@(Word _):Word "in":ys):xs) = Word "foreach" :Tuple(x:Word ",":ys):xs
 preprocess (chunk:ts)
   |
   chunk `elem` [Word "if", Word "for", Word "while"] =

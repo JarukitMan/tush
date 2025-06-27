@@ -95,25 +95,15 @@ splitWith f list@(x:xs) =
   where (front, back) = splitWith f xs
 
 splitEsc :: (Char -> Bool) -> T.Text -> (T.Text, T.Text)
--- splitEsc _ [] = ([], [])
--- splitEsc f ('\\':x:xs) =
---   (toEsc x:front, back)
---   where (front, back) = splitEsc f xs
-splitEsc f list
-  |
-  T.null list = (T.empty, T.empty)
-  |
-  x == '\\' =
-    (T.cons (toEsc x) front, back)
-  |
-  otherwise =
-    if f x
-    then (T.empty, list)
-    else (T.cons x front, back)
-  where
-    x = T.head list
-    xs = T.drop 1 list
-    (front, back) = splitEsc f xs
+splitEsc _ T.Empty = (T.Empty, T.Empty)
+splitEsc f ('\\' T.:< x T.:< xs) =
+  (toEsc x T.:< front, back)
+  where (front, back) = splitEsc f xs
+splitEsc f list@(x T.:< xs) =
+  if f x
+  then (T.empty, list)
+  else (T.cons x front, back)
+  where (front, back) = splitEsc f xs
 
 toEsc :: Char -> Char
 toEsc x =
@@ -144,3 +134,10 @@ takeDiff :: Eq a => [a] -> [a] -> [a]
 takeDiff xs [] = xs
 takeDiff [] _  = []
 takeDiff (x:xs) (y:ys) = if x == y then takeDiff xs ys else x:xs
+
+searchText :: T.Text -> T.Text -> [Integer]
+searchText _ T.Empty = []
+searchText needle haystack =
+  if needle `T.isPrefixOf` haystack
+  then 0 : map succ (searchText needle (T.drop 1 haystack))
+  else map succ (searchText needle $ T.drop 1 haystack)

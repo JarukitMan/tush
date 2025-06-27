@@ -25,7 +25,8 @@ opr not_valid_yet Str word = {
 (10)insideAdd (11)
 main
 
-opr fib Int n = (
+# You can kind of assign return types like this. Kind of. Composite types aren't allowed.
+opr fib Int n = int (
   if n > 1 (
     return fib(n - 1) + fib(n - 2)
   )
