@@ -1658,6 +1658,38 @@ asn gbs _ mem lhs rhs = do
             _ -> do
               T.putStrLn $ "Can't assign `" `T.append` T.show r `T.append` "` to  variable `" `T.append` vname `T.append` "`."
               return Nothing
+    Expression _ "set" lset rset -> do
+      if lset == Operand (Tup [])
+      then do
+        right <-
+          case exp2typ mem rhs of
+            Nothing -> return Nothing
+            Just t -> interpret gbs t mem rhs
+        case right of
+          Nothing -> return Nothing
+          Just (rbs, mr, r) ->
+            case rset of
+              Operand (Str nam) -> do
+                setEnv (T.unpack nam) (show r) `catch` (\(e :: IOError) -> T.putStrLn (T.show e) >>= \_ -> return ())
+                return $ Just (rbs, mr, Tup' [])
+              Operand (Wrd nam) -> do
+                setEnv (T.unpack nam) (show r) `catch` (\(e :: IOError) -> T.putStrLn (T.show e) >>= \_ -> return ())
+                return $ Just (rbs, mr, Tup' [])
+              Operand (Var nam) ->
+                case getMem mr nam of
+                  Just (Val (Right nam')) -> do
+                    let nam'' = show nam'
+                    setEnv nam'' (show r) `catch` (\(e :: IOError) -> T.putStrLn (T.show e) >>= \_ -> return ())
+                    return $ Just (rbs, mr, Tup' [])
+                  _ ->
+                    T.putStrLn "Variable used in set operation not defined yet." >>=
+                    \_ -> return Nothing
+              _ ->
+                T.putStrLn "Set operation's middle part (name) needs to be evaluated." >>=
+                \_ -> return Nothing
+      else
+        T.putStrLn "Set operation's left-hand side is not empty." >>=
+        \_ -> return Nothing
     Expression _ "let" llet rlet -> do
       right <-
         case exp2typ mem rhs of
@@ -2074,3 +2106,36 @@ with gbs _ mem lhs rhs = do
             (\(e :: IOError) -> T.putStrLn $ "with: " `T.append` T.show e)
           return $ Just (rbs, mr, Tup' [])
         _ -> return Nothing
+
+set :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
+set _ _ _ _ _ =
+  T.putStrLn "Naked set doesn't exist. And won't exist." >>=
+  \_ -> return Nothing
+-- For unsetting environments for this session
+unset :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
+unset gbs _ mem lhs rhs =
+  if lhs == Operand (Tup [])
+  then do
+    right <- interpret gbs Tany mem rhs
+    case right of
+      Nothing -> return Nothing
+      Just (rbs, mr, r) -> do
+        unsetEnv (show r) `catch` (\(e :: IOError) -> T.putStrLn ("unset: " `T.append` T.show e) >>= \_ -> return ())
+        return $ Just (rbs, mr, Tup' [])
+  else
+    T.putStrLn "Unset operation's left-hand side is not empty." >>=
+    \_ -> return Nothing
+
+get :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
+get gbs _ mem lhs rhs =
+  if lhs == Operand (Tup [])
+  then do
+    right <- interpret gbs Tany mem rhs
+    case right of
+      Nothing -> return Nothing
+      Just (rbs, mr, r) -> do
+        out <- getEnv (show r) `catch` (\(e :: IOError) -> T.putStrLn ("get: " `T.append` T.show e) >>= \_ -> return "")
+        return $ case out of {"" -> Nothing; _ -> Just (rbs, mr, Str' $ T.pack out)}
+  else
+    T.putStrLn "Unset operation's left-hand side is not empty." >>=
+    \_ -> return Nothing

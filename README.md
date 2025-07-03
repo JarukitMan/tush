@@ -140,6 +140,9 @@ Operations are split into two types, base and defined.
 Base Operators:
 * IO
     * input -- reads a line of input from the stdin into a str.
+    * set -- sets environment with name = value. `set name = value`
+    * unset -- unsets a variable from the environment with its name. `unset name`
+    * get -- gets a value from the environment with its name, fails if the name doesn't exist. `get name #outs puts string "value"`
 * Arithmatic
     * \+ -- adds two numbers together
     * \- -- subtracts the second number from the first

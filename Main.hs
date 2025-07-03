@@ -176,6 +176,24 @@ initmem =
             (empty, Nothing)
           )
         ),
+        ("set", Op 4
+          (
+            insertOp (Tany, Tany) (Base set (Ttup []))
+            (empty, Nothing)
+          )
+        ),
+        ("get", Op 4
+          (
+            insertOp (Ttup [], Tstr) (Base get (Tstr))
+            (empty, Nothing)
+          )
+        ),
+        ("unset", Op 4
+          (
+            insertOp (Tany, Tany) (Base unset (Ttup []))
+            (empty, Nothing)
+          )
+        ),
         ("=", Op 4
           (
             insertOp (Tany, Tany) (Base asn (Ttup []))
