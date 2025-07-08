@@ -56,26 +56,32 @@ interpret b t mem (Expression _ opr left right) =
                         Nothing -> return Nothing
                         Just (b', mem', v') -> return $ Just (b', mem', vCollapse v')
                     Just (Defined scopenum (names, optree) _) -> do
-                      Just (b', mem', lefts') <- interpret b t mem left
-                      Just (b'', mem'', rights') <- interpret b' t mem' right
-                      let
-                        (unused, used) = splitAt (length mem'' - fromIntegral scopenum) mem''
-                        -- Input Values.
-                        vals = Tup' [vCollapse lefts', vCollapse rights']
-                        -- newmem = case zipVar names vals of
-                        --   Just ns -> Just $ (M.fromList ns):used
-                        --   Nothing -> Nothing
-                        newmem = do
-                          ns <- zipVar names vals
-                          Just $ (M.fromList ns):used
-                      case newmem of
-                        Just nm -> do
-                          out <- interpret b'' t nm optree
-                          case out of
-                            Nothing -> return Nothing
-                            -- Simple memory dropping. Might not work as intended.
-                            Just (nb, frontmem, result) -> return $ Just (nb, unused ++ (drop 1 frontmem), vCollapse result)
+                      left' <- interpret b lefts mem left
+                      case left' of
                         Nothing -> return Nothing
+                        Just (b', mem', lefts') -> do
+                          right' <- interpret b' rights mem' right
+                          case right' of
+                            Nothing -> return Nothing
+                            Just (b'', mem'', rights') -> do
+                              let
+                                (unused, used) = splitAt (length mem'' - fromIntegral scopenum) mem''
+                                -- Input Values.
+                                vals = Tup' [vCollapse lefts', vCollapse rights']
+                                -- newmem = case zipVar names vals of
+                                --   Just ns -> Just $ (M.fromList ns):used
+                                --   Nothing -> Nothing
+                                newmem = do
+                                  ns <- zipVar names vals
+                                  Just $ (M.fromList ns):used
+                              case newmem of
+                                Just nm -> do
+                                  out <- interpret b'' t nm optree
+                                  case out of
+                                    Nothing -> return Nothing
+                                    -- Simple memory dropping. Might not work as intended.
+                                    Just (nb, frontmem, result) -> return $ Just (nb, unused ++ (drop 1 frontmem), vCollapse result)
+                                Nothing -> return Nothing
 interpret b _ mem (Operand x) =
   case x of
     Wrd wrd ->

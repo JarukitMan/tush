@@ -1,17 +1,20 @@
 # FIX:
+- Make it so the right side isn't evaluated if the types don't match in assignment.
 - Find a way to deal with "," and tuple appending/dropping type signatures.
        ^ Might have to dabble into Template Haskell. (decision inspired by [https://hackage.haskell.org/package/tuple-append])
-- Make pipe actually pipe processes, not pass strings.
+- Implement Out', wait for processes at ",", and just pass on for pipes and stuff. Things that don't involve processes just... wait for it to end and not capture anything.
+  Fix handletup and preeeeeetty much everything else to wait for Out' first.
 
 # TODO:
 - Implement Grr.
 - Implement Imp.
 - Implement Tsf.
-- Add globbing/regex. Will probably be built into Tsf...
+- Add globbing/regex to input. Will probably be built into Tsf...
 - Add debug messages to the base operations.
 - Add help, exec, and time operators.
 - Write a proper README and split the current one to Tssl and Tsf.
 - Write examples.
+- Store handles for the processes that are in the background.
 
 # FUTURE:
 ## Front part:
@@ -28,7 +31,7 @@
 - Basically, pattern matching. This applies to variable assignment too.
 - Struct and typeclass/trait.
 - More string types. E.G. lit string, regex string, whatever.
-- Slices, anonymous functions, libraries.
+- Slices, functions as values, specified return type, libraries.
 - Compiled version.
 - Seperate IO operations and non-IO operations. This will allow for better handling of both.
 - Make a "Rabbit" variant. A lazy, probably faster version.

@@ -103,8 +103,8 @@ checkWrd mem tok =
 -- Strict form of token.
 data Value =
   Int' Integer | Flt' Double | Chr' Char | Str' T.Text | Bln' Bool | Pth' FilePath | Typ' Type |
-  Arr' Type [Value] | Tup' [Value] | Break -- | Sig' Signal
-  deriving (Eq)
+  Arr' Type [Value] | Tup' [Value] | Break | Out' Handle ProcessHandle
+  -- deriving (Eq)
 
 emptish :: Value -> Bool
 emptish v =
@@ -112,6 +112,26 @@ emptish v =
     Tup' [] -> True
     Tup' vs -> and (map emptish vs)
     _       -> False
+
+instance Eq Value where
+  (==) :: Value -> Value -> Bool
+  v1 == v2 =
+    case (v1, v2) of
+      -- I don't want to repeat the Ord again, lol.
+      (Int' a, Int' b) -> a == b
+      (Int' a, Flt' b) -> (fromInteger a) == b
+      (Flt' a, Int' b) -> a == (fromInteger b)
+      (Flt' a, Flt' b) -> a == b
+      (Chr' a, Int' b) -> ord a == (fromInteger b)
+      (Int' a, Chr' b) -> (fromInteger a) == ord b
+      (Chr' a, Chr' b) -> a == b
+      (Str' a, Str' b) -> a == b
+      (Bln' a, Bln' b) -> a == b
+      (Pth' a, Pth' b) -> a == b
+      (Typ' a, Typ' b) -> a == b
+      (Arr' _ a, Arr' _ b) -> a == b
+      (Tup' a, Tup' b) -> a == b
+      _                -> False
 instance Ord Value where
   compare :: Value -> Value -> Ordering
   compare v1 v2 =
@@ -245,6 +265,8 @@ instance Ord Value where
               _ -> GT
       (_, Break) -> EQ
       (Break, _) -> EQ
+      (Out' _ _, _) -> EQ
+      (_, Out' _ _) -> EQ
 
 -- data Signal = Break | Continue | Return
 
@@ -263,11 +285,12 @@ instance Show Value where
       Arr' _ x -> '[':(intercalate " " $ map show x)   ++ "]"
       Tup' tup -> '(':(intercalate " " $ map show tup) ++ ")"
       Break    -> "Break"
+      Out' _ _ -> "Out"
 
 -- Added a "break" type for sending the break signal to the for/while loop controller.
 data Type =
   Tint | Tflt | Tchr | Tstr | Ttyp | Tbln | Tpth |
-  Tarr Type | Ttup [Type] | Tany | Tbrk
+  Tarr Type | Ttup [Type] | Tany | Tbrk | Tout
   deriving (Ord, Eq)
 
 instance Show Type where
@@ -285,6 +308,7 @@ instance Show Type where
       Tbrk -> "Brk"
       Tarr t -> "[" ++ show t ++ "]"
       Ttup t -> "(" ++ intercalate " " (map show t) ++ ")"
+      Tout -> "Out"
 
 hasTany :: Type -> Bool
 hasTany typ =
@@ -442,6 +466,7 @@ val2typ val =
     Arr' typ _ -> Tarr typ
     Tup' tup   -> Ttup (map val2typ tup)
     Break      -> Tbrk
+    Out' _ _   -> Tout
 
 tok2typ :: Memory -> Token -> Type
 tok2typ mem t =
@@ -538,6 +563,7 @@ argify val =
     Tup' tup -> concat $ map argify tup
     Arr' _ arr -> concat $ map argify arr
     Break    -> []
+    Out' _ _ -> [] 
 
 -- Wanna make it better, but I don't know how.
 argIO :: [Value] -> IO [T.Text]
@@ -574,6 +600,26 @@ argIO vals =
     vals
   ) >>=
   (\x -> return $ concat x)
+  where
+    cap :: Value -> IO (Maybe T.Text)
+    cap v = do
+      o <- cmd v
+      case o of
+        Nothing -> return Nothing
+        Just (out, procHand) -> do
+          output <- do
+            -- hSetBuffering out NoBuffering
+            hSetBinaryMode out True
+            B.hGetContents out
+          -- copyHandleData out stdout
+          -- DEBUG
+          -- putStr output
+          exitCode <- waitForProcess procHand
+          if exitCode /= ExitSuccess
+          then T.putStrLn $ "Process " `T.append` T.show v `T.append` " exited with exit code: " `T.append` T.show exitCode
+          else return ()
+          -- Bash does this too. Might as well, since I don't want my args to contain newlines.
+          return $ Just (T.unwords $ T.words $ T.decodeUtf8Lenient output)
   -- (
   --   sequence $
   --   map
@@ -590,17 +636,20 @@ argIO vals =
 -- -- use their own functions that either don't inherit some std files or are async.
 -- -- Surrenders the program to an external process.
 -- -- Returns data in its stdout to the interpreter.
-cmd :: Value -> IO ()
+cmd :: Value -> IO (Maybe (Handle, ProcessHandle))
 cmd val =
   case val of
+    Out' o h              -> return $ Just (o, h)
     Tup' (command:args) -> exec command args
     Arr' _ (command:args) -> exec command args
     Str' command          -> exec (Str' command) []
     Pth' command          -> exec (Pth' command) []
-    _ -> putStrLn $ show val
+    _ -> putStrLn (show val) >>= \_ -> return Nothing
   where
-    handler :: IOError -> IO ()
-    handler e = T.putStrLn $ "cmd: " `T.append` T.show e
+    handler :: IOError -> IO (Maybe (Handle, ProcessHandle))
+    handler e =
+      T.putStrLn ("cmd: " `T.append` T.show e) >>=
+      \_ -> return Nothing
     exec command args = (exec' command args) `catch` handler
     exec' command args =
       case command of
@@ -608,128 +657,153 @@ cmd val =
           out <- cap command
           args' <- argIO args
           case out of
-            Nothing -> return ()
-            Just out' -> callProcess (T.unpack out') (map T.unpack args')
+            Nothing -> return Nothing
+            Just out' -> cproc (T.unpack out') (map T.unpack args')
         Arr' _ _ -> do
           out <- cap command
           args' <- argIO args
           case out of
-            Nothing -> return ()
-            Just out' -> callProcess (T.unpack out') (map T.unpack args')
+            Nothing -> return Nothing
+            Just out' -> cproc (T.unpack out') (map T.unpack args')
         _ ->
           (argIO args) >>=
-          (\args' -> callProcess (show command) (map T.unpack args'))
+          (\args' -> cproc (show command) (map T.unpack args'))
+    cproc :: String -> [String] -> IO (Maybe (Handle, ProcessHandle))
+    cproc x xs = do
+      hans <- createProcess (proc x xs) {std_out = CreatePipe}
+      case hans of
+        (_, Just o, _, h) -> return $ Just (o, h)
+        _ -> return Nothing
+    cap :: Value -> IO (Maybe T.Text)
+    cap v = do
+      o <- cmd v
+      case o of
+        Nothing -> return Nothing
+        Just (out, procHand) -> do
+          output <- do
+            -- hSetBuffering out NoBuffering
+            hSetBinaryMode out True
+            B.hGetContents out
+          -- copyHandleData out stdout
+          -- DEBUG
+          -- putStr output
+          exitCode <- waitForProcess procHand
+          if exitCode /= ExitSuccess
+          then T.putStrLn $ "Process " `T.append` T.show v `T.append` " exited with exit code: " `T.append` T.show exitCode
+          else return ()
+          -- Bash does this too. Might as well, since I don't want my args to contain newlines.
+          return $ Just (T.unwords $ T.words $ T.decodeUtf8Lenient output)
 
-cmdConc :: Value -> IO ()
-cmdConc val =
-  case val of
-    Tup' (command:args) -> exec command args
-    Arr' _ (command:args) -> exec command args
-    Str' command          -> exec (Str' command) []
-    Pth' command          -> exec (Pth' command) []
-    _ -> putStrLn $ show val
-  where
-    handler :: IOError -> IO ()
-    handler e = putStrLn $ "cmd: " ++ show e
-    exec command args = (exec' command args) `catch` handler
-    exec' command args =
-      case command of
-        Tup' _   -> do
-          out <- cap command
-          args' <- argIO args
-          case out of
-            Nothing -> return ()
-            Just out' ->
-              spawnProcess (T.unpack out') (map T.unpack args') >>=
-              \_ -> return ()
-        Arr' _ _ -> do
-          out <- cap command
-          args' <- argIO args
-          case out of
-            Nothing -> return ()
-            Just out' ->
-              spawnProcess (T.unpack out') (map T.unpack args') >>=
-              \_ -> return ()
-        _ ->
-          (argIO args) >>=
-          (\args' ->
-            spawnProcess (show command) (map T.unpack args')) >>=
-            \_ -> return ()
+-- cmdConc :: Value -> IO ()
+-- cmdConc val =
+--   case val of
+--     Tup' (command:args) -> exec command args
+--     Arr' _ (command:args) -> exec command args
+--     Str' command          -> exec (Str' command) []
+--     Pth' command          -> exec (Pth' command) []
+--     _ -> putStrLn $ show val
+--   where
+--     handler :: IOError -> IO ()
+--     handler e = putStrLn $ "cmd: " ++ show e
+--     exec command args = (exec' command args) `catch` handler
+--     exec' command args =
+--       case command of
+--         Tup' _   -> do
+--           out <- cap command
+--           args' <- argIO args
+--           case out of
+--             Nothing -> return ()
+--             Just out' ->
+--               spawnProcess (T.unpack out') (map T.unpack args') >>=
+--               \_ -> return ()
+--         Arr' _ _ -> do
+--           out <- cap command
+--           args' <- argIO args
+--           case out of
+--             Nothing -> return ()
+--             Just out' ->
+--               spawnProcess (T.unpack out') (map T.unpack args') >>=
+--               \_ -> return ()
+--         _ ->
+--           (argIO args) >>=
+--           (\args' ->
+--             spawnProcess (show command) (map T.unpack args')) >>=
+--             \_ -> return ()
       
--- For usage in parts where the output needs to be captured.
--- E.G: tuples that includes this verse in its return value.
--- Doesn't work with fastfetch (and probably some other programs) for some reason.
--- The reason seems encoding-related so I just converted it to binary, thus fucking some characters up.
-cap :: Value -> IO (Maybe T.Text)
-cap val =
-  case val of
-    Tup' (command:args) -> exec command args
-    Arr' _ (command:args) -> exec command args
-    Str' command          -> exec (Str' command) []
-    _ -> do
-      -- don't know about this...
-      -- putStrLn $ show val
-      return $ Just $ T.show val
-  where
-    handler :: IOError -> IO (Maybe a)
-    handler e = do
-        T.putStrLn $ "cap: " `T.append` T.show e
-        return Nothing
-    exec command args = (exec' command args) `catch` handler
-    exec' :: Value -> [Value] -> IO (Maybe T.Text)
-    exec' command args =
-      let
-        capbody c as = do
-          as' <- argIO as
-          process <-
-             -- Create process accepts:
-            createProcess
-            (
-              -- as
-              CreateProcess
-              (
-                RawCommand (T.unpack c) (map T.unpack as')
-              )
-              -- cwd, env
-              Nothing Nothing
-              -- std files
-              Inherit CreatePipe Inherit
-              -- close fds, create group, delegate ctl-c,
-              -- detach console, create new console, new session
-              False False True False False False
-              -- child group, child user, use process jobs
-              -- (wait for the entire thing to finish before unblocking on Windows.)
-              Nothing Nothing True
-            )
-          case process of
-            (_, Just out, _, procHand) -> do
-              output <- do
-                -- hSetBuffering out NoBuffering
-                hSetBinaryMode out True
-                B.hGetContents out
-              -- copyHandleData out stdout
-              -- DEBUG
-              -- putStr output
-              exitCode <- waitForProcess procHand
-              if exitCode /= ExitSuccess
-              then T.putStrLn $ "Process " `T.append` c `T.append` T.unwords as' `T.append` " exited with exit code: " `T.append` T.show exitCode
-              else return ()
-              -- Bash does this too. Might as well, since I don't want my args to contain newlines.
-              return $ Just (T.unwords $ T.words $ T.decodeUtf8Lenient output)
-            _ ->
-              (T.putStrLn $ "Can't create process " `T.append` (T.intercalate " " $ argify val) `T.append` " properly") >>=
-              (\_ -> return Nothing)
-      in
-      case command of
-        Tup' _   -> do
-          out <- cap command
-          case out of
-            Nothing -> return Nothing
-            Just out' -> capbody out' args
-        Arr' _ _ -> do
-          out <- cap command
-          case out of
-            Nothing -> return Nothing
-            Just out' -> capbody out' args
-        _ -> capbody (T.show command) args
-        -- capbody (show command) args
+-- -- For usage in parts where the output needs to be captured.
+-- -- E.G: tuples that includes this verse in its return value.
+-- -- Doesn't work with fastfetch (and probably some other programs) for some reason.
+-- -- The reason seems encoding-related so I just converted it to binary, thus fucking some characters up.
+-- cap :: Value -> IO (Maybe T.Text)
+-- cap val =
+--   case val of
+--     Tup' (command:args) -> exec command args
+--     Arr' _ (command:args) -> exec command args
+--     Str' command          -> exec (Str' command) []
+--     _ -> do
+--       -- don't know about this...
+--       -- putStrLn $ show val
+--       return $ Just $ T.show val
+--   where
+--     handler :: IOError -> IO (Maybe a)
+--     handler e = do
+--         T.putStrLn $ "cap: " `T.append` T.show e
+--         return Nothing
+--     exec command args = (exec' command args) `catch` handler
+--     exec' :: Value -> [Value] -> IO (Maybe T.Text)
+--     exec' command args =
+--       let
+--         capbody c as = do
+--           as' <- argIO as
+--           process <-
+--              -- Create process accepts:
+--             createProcess
+--             (
+--               -- as
+--               CreateProcess
+--               (
+--                 RawCommand (T.unpack c) (map T.unpack as')
+--               )
+--               -- cwd, env
+--               Nothing Nothing
+--               -- std files
+--               Inherit CreatePipe Inherit
+--               -- close fds, create group, delegate ctl-c,
+--               -- detach console, create new console, new session
+--               False False True False False False
+--               -- child group, child user, use process jobs
+--               -- (wait for the entire thing to finish before unblocking on Windows.)
+--               Nothing Nothing True
+--             )
+--           case process of
+--             (_, Just out, _, procHand) -> do
+--               output <- do
+--                 -- hSetBuffering out NoBuffering
+--                 hSetBinaryMode out True
+--                 B.hGetContents out
+--               -- copyHandleData out stdout
+--               -- DEBUG
+--               -- putStr output
+--               exitCode <- waitForProcess procHand
+--               if exitCode /= ExitSuccess
+--               then T.putStrLn $ "Process " `T.append` c `T.append` T.unwords as' `T.append` " exited with exit code: " `T.append` T.show exitCode
+--               else return ()
+--               -- Bash does this too. Might as well, since I don't want my args to contain newlines.
+--               return $ Just (T.unwords $ T.words $ T.decodeUtf8Lenient output)
+--             _ ->
+--               (T.putStrLn $ "Can't create process " `T.append` (T.intercalate " " $ argify val) `T.append` " properly") >>=
+--               (\_ -> return Nothing)
+--       in
+--       case command of
+--         Tup' _   -> do
+--           out <- cap command
+--           case out of
+--             Nothing -> return Nothing
+--             Just out' -> capbody out' args
+--         Arr' _ _ -> do
+--           out <- cap command
+--           case out of
+--             Nothing -> return Nothing
+--             Just out' -> capbody out' args
+--         _ -> capbody (T.show command) args
+--         -- capbody (show command) args

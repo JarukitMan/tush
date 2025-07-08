@@ -14,7 +14,8 @@ Shipped alongside the Erminal, (hopefully).
 ___
 
 ## Dependencies
-- [brick] (https://github.com/jtdaugherty/brick/tree/master?tab=readme-ov-file) Might change to vty. We'll see.
+- [cabal] (https://www.haskell.org/cabal/)
+- [vty] (https://github.com/jtdaugherty/vty)
 
 ## Abnormalities:
 
@@ -24,7 +25,7 @@ ___
     Strings in normal bash is very, very annoying.
 3. Vim-style text navigation - Personal preferences.
 4. Thick shell. Similar to vim's "q:" screen. The shell clears the stdin part of the screen and\
-    lets processes "take over" while keeping track of the stdin and stdout to put in the buffer later.\
+    lets processes "take over" (WIP: while keeping track of the stdin and stdout to put in the buffer later.)\
     It then rewrites the stdin area buffer.
 ___
 

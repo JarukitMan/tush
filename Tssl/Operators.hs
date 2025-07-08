@@ -22,6 +22,7 @@ import System.Exit
 import System.Environment
 import Control.Exception
 import GHC.Float
+-- import GHC.IO.Handle
 -- import Text.Read
 
 add :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
@@ -449,26 +450,48 @@ next gbs etp mem lhs rhs = catch (do
     -- Should this capture the output or not?
     -- It would've been done without a thought if capturing the output
     -- didn't mean screwing up the user experience.
+    exec :: String -> [Value] -> IO Value
+    exec x xs =
+      argIO xs >>=
+      \args -> createProcess (proc x (map T.unpack args)) >>=
+      \(_, _, _, h) -> waitForProcess h >>=
+      \_ -> return $ Tup' []
     check a =
         case a of
           Str' x            -> execOr (T.unpack x)
           -- Tup' ((Str' x):_) -> execOr x
           -- Arr' Tstr (x:_)   -> execOr $ show x
-          -- Str' _            -> cmd a >>= \_ -> return $ Tup' []
-          Tup' ((Str' _):_) -> cmd a >>= \_ -> return $ Tup' []
-          Arr' Tstr _       -> cmd a >>= \_ -> return $ Tup' []
+          -- Str' _            -> cmdWait a
+          Tup' ((Str' x):xs) -> exec (T.unpack x) xs
+          Arr' Tstr (x:xs)       -> exec (show x) xs
           -- Because they aren't necessarily in PATH
-          Pth' _            -> cmd a >>= \_ -> return $ Tup' []
-          Tup' ((Pth' _):_) -> cmd a >>= \_ -> return $ Tup' []
-          Arr' Tpth _       -> cmd a >>= \_ -> return $ Tup' []
+          Pth' x            -> exec x []
+          Tup' ((Pth' x):xs) -> exec x xs
+          Arr' Tpth (x:xs)       -> exec (show x) xs
+          Out' o _          -> do
+            (_, _, _, process) <- createProcess (proc "cat" []) {std_in = UseHandle o}
+            -- FIXME: Worst code I have ever written to date.
+            exitCode <- waitForProcess process
+            -- Screw this, I'm passing it to cat.
+            -- output <- do
+            --   -- hSetBuffering out NoBuffering
+            --   hSetBinaryMode o True
+            --   B.hGetContents o
+            -- T.putStr (T.decodeUtf8Lenient output)
+            -- exitCode <- waitForProcess h
+            -- hDuplicateTo tmpout stdout
+            if exitCode /= ExitSuccess
+            then T.putStrLn $ "Process " `T.append` T.show a `T.append` " exited with exit code: " `T.append` T.show exitCode
+            else return ()
+            -- Bash does this too. Might as well, since I don't want my args to contain newlines.
+            return $ Tup' []
           _ -> return a
           where
             execOr x = do
               path <- findExecutable x
               case path of
                 Nothing -> return a
-                Just _ ->
-                  cmd a >>= \_ -> return (Tup' [])
+                Just _ -> exec (show a) []
                   -- aout <- cap a
                   -- case aout of Nothing -> return $ Tup' []
                   --   Just o  -> return $ Str' o
@@ -525,12 +548,12 @@ also gbs etp mem lhs rhs = catch (do
           -- Tup' ((Str' x):_) -> execOr x
           -- Arr' Tstr (x:_)   -> execOr $ show x
           -- Str' _            -> cmdConc a >>= \_ -> return $ Tup' []
-          Tup' ((Str' _):_) -> cmdConc a >>= \_ -> return $ Tup' []
-          Arr' Tstr _       -> cmdConc a >>= \_ -> return $ Tup' []
+          Tup' ((Str' _):_) -> cmd a >>= \_ -> return $ Tup' []
+          Arr' Tstr _       -> cmd a >>= \_ -> return $ Tup' []
           -- Because they aren't necessarily in PATH
-          Pth' _            -> cmdConc a >>= \_ -> return $ Tup' []
-          Tup' ((Pth' _):_) -> cmdConc a >>= \_ -> return $ Tup' []
-          Arr' Tpth _       -> cmdConc a >>= \_ -> return $ Tup' []
+          Pth' _            -> cmd a >>= \_ -> return $ Tup' []
+          Tup' ((Pth' _):_) -> cmd a >>= \_ -> return $ Tup' []
+          Arr' Tpth _       -> cmd a >>= \_ -> return $ Tup' []
           _ -> return a
           -- where
           --   execOr x = do
@@ -564,8 +587,6 @@ pipe gbs _ mem lhs rhs = (do
       case right of
         Nothing -> return Nothing
         Just (rbs, mr, r) -> do
-          -- Should make it an actual pipe, but how do I do that? How do I allow chaining with that?
-          -- Can't just not wait for the process. I'd have to pass it around.
           lo <-
             case l of
               -- Tup' (Str' x:_) -> do
@@ -573,50 +594,60 @@ pipe gbs _ mem lhs rhs = (do
                 -- case x' of
                 --   Nothing -> return $ Just $ show l
                 --   Just _ -> cap l
-              Tup' (Str' _:_) -> cap l
+              Tup' (Str' _:_) -> cmd l
               -- Not sure about this.
-              Str' x -> return $ Just x
+              Str' _          -> cmd l
               -- Str' _          -> cap l
               -- Str' x          -> do
               --   x' <- findExecutable x
               --   case x' of
               --     Nothing -> return $ Just $ show l
               --     Just _ -> cap l
-              Tup' (Pth' _:_) -> cap l
-              Pth' _          -> cap l
+              Tup' (Pth' _:_) -> cmd l
+              Pth' _          -> cmd l
               _               -> return Nothing
               -- _               -> return $ Just $ show l
           let
-            lout = fromMaybe "" lo
+            -- lout = fromMaybe "" lo
+            exec :: String -> [Value] -> IO (Maybe (Bool, Memory, Value))
             exec x xs = do
-              x' <- findExecutable (T.unpack x)
+              x' <- findExecutable x
               case x' of
                 Nothing -> return Nothing
                 -- Nothing -> return $ Just (rbs, mr, Str' $ lout ++ ' ':(show $ vCollapse $ Tup' $ Str' x:xs))
                 Just x''  -> do
                   rarg <- argIO xs
-                  (inp, out, _, randle) <- createProcess (proc x'' (map T.unpack rarg)) {std_in = CreatePipe, std_out = CreatePipe}
-                  case (inp, out) of
-                    (Just i, Just o) -> do
-                      txt <- do
-                        T.hPutStr i lout
-                        hSetBinaryMode o True
-                        hClose i
-                        B.hGetContents o
-                      -- putStrLn txt
-                      exitcode <- waitForProcess randle
-                      if exitcode /= ExitSuccess
-                      then T.putStrLn $ "Process " `T.append` x `T.append` (T.unwords rarg) `T.append` " exited with exit code: " `T.append` T.show exitcode
-                      else return ()
-                      return $ Just (rbs, mr, Str' $ T.decodeUtf8Lenient txt)
-                    _ -> do
-                      T.putStrLn $ "Could not create process " `T.append` x `T.append` (T.unwords rarg) `T.append` " properly."
-                      return Nothing
+                  case lo of
+                    Nothing ->
+                      T.putStrLn ("Could not create process " `T.append` (T.pack x) `T.append` (T.unwords rarg) `T.append` " properly.") >>=
+                      \_ -> return Nothing
+                    Just (i, _) -> do
+                      (_, out, _, randle) <- createProcess (proc x'' (map T.unpack rarg)) {std_in = UseHandle i, std_out = CreatePipe}
+                      case out of
+                        Nothing -> return Nothing
+                        Just o  -> return $ Just (rbs, mr, Out' o randle)
+                  -- (inp, out, _, randle) <- createProcess (proc x'' (map T.unpack rarg)) {std_in = CreatePipe, std_out = CreatePipe}
+                  -- case (inp, out) of
+                  --   (Just i, Just o) -> do
+                  --     txt <- do
+                  --       T.hPutStr i lout
+                  --       hSetBinaryMode o True
+                  --       hClose i
+                  --       B.hGetContents o
+                  --     -- putStrLn txt
+                  --     exitcode <- waitForProcess randle
+                  --     if exitcode /= ExitSuccess
+                  --     then T.putStrLn $ "Process " `T.append` x `T.append` (T.unwords rarg) `T.append` " exited with exit code: " `T.append` T.show exitcode
+                  --     else return ()
+                  --     return $ Just (rbs, mr, Str' $ T.decodeUtf8Lenient txt)
+                  --   _ -> do
+                  --     T.putStrLn $ "Could not create process " `T.append` x `T.append` (T.unwords rarg) `T.append` " properly."
+                  --     return Nothing
           -- let lout = show l
           case r of
-            Tup' (Str' x:xs) -> exec x xs
-            Tup' (Pth' x:xs) -> exec (T.pack x) xs
-            _ -> exec (T.show r) []) `catch` handler
+            Tup' (Str' x:xs) -> exec (T.unpack x) xs
+            Tup' (Pth' x:xs) -> exec x xs
+            _ -> exec (show r) []) `catch` handler
   where
     handler :: IOError -> IO (Maybe a)
     handler e = do
@@ -693,6 +724,25 @@ here gbs _ mem lhs rhs = (do
     handler e = do
         T.putStrLn $ "here: " `T.append` T.show e
         return Nothing
+    cap :: Value -> IO (Maybe T.Text)
+    cap v = do
+      o <- cmd v
+      case o of
+        Nothing -> return Nothing
+        Just (out, procHand) -> do
+          output <- do
+            -- hSetBuffering out NoBuffering
+            hSetBinaryMode out True
+            B.hGetContents out
+          -- copyHandleData out stdout
+          -- DEBUG
+          -- putStr output
+          exitCode <- waitForProcess procHand
+          if exitCode /= ExitSuccess
+          then T.putStrLn $ "Process " `T.append` T.show v `T.append` " exited with exit code: " `T.append` T.show exitCode
+          else return ()
+          -- Bash does this too. Might as well, since I don't want my args to contain newlines.
+          return $ Just (T.unwords $ T.words $ T.decodeUtf8Lenient output)
 
 wrt :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
 wrt gbs _ mem lhs rhs = do
@@ -1385,18 +1435,18 @@ whl gbs etp mem lhs rhs =
                     case final of
                       Nothing -> return Nothing
                       Just (fbs, mf, Arr' t f) ->
-                        if t == val2typ r
+                        if t == val2typ r || t == Tany
                         then return $ Just (fbs, mf, Arr' t (r:f))
                         else
-                          (T.putStrLn $ "While loop `" `T.append` T.show expression `T.append` " detected to have different output types.") >>=
+                          (T.putStrLn $ "while: While loop `" `T.append` T.show expression `T.append` " detected to have different output types.") >>=
                           \_ -> return Nothing
-                      Just (fbs, mf, f) ->
-                        if val2typ f == val2typ r
-                        then return $ Just (fbs, mf, Arr' (val2typ r) [r, f])
-                        else
-                          (T.putStrLn $ "While loop `" `T.append` T.show expression `T.append` " detected to have different output types.") >>=
-                          \_ -> return Nothing
-            Just (_, ml, Bln' False) -> return $ Just (False, ml, Tup' [])
+                      Just (_, _, _) -> T.putStrLn "while: branch should not be reachable." >>= \_ -> return Nothing
+                        -- if val2typ f == val2typ r || f == Arr' Tany []
+                        -- then return $ Just (fbs, mf, Arr' (val2typ r) [r, f])
+                        -- else
+                        --   (T.putStrLn $ "While loop `" `T.append` T.show expression `T.append` " detected to have different output types.") >>=
+                        --   \_ -> return Nothing
+            Just (_, ml, Bln' False) -> return $ Just (False, ml, Arr' Tany [])
             _                        -> return Nothing
         _ -> return Nothing
     _ -> do
@@ -1413,26 +1463,26 @@ whl gbs etp mem lhs rhs =
                 iteration <- interpret True etp mem lhs
                 case iteration of
                   Nothing -> return Nothing
-                  Just (_, ml, Break) -> return $ Just (True, ml, Tup' [])
+                  Just (_, ml, Break) -> return $ Just (True, ml, Arr' Tany [])
                   Just (_, ml, l) -> do
                     final <- whl True etp ml lhs rhs
                     case final of
                       Nothing -> return Nothing
                       Just (fbs, mf, Arr' t f) ->
-                        if t == val2typ l
+                        if t == val2typ l || t == Tany
                         then return $ Just (fbs, mf, Arr' t (l:f))
                         else
-                          (T.putStrLn $ "While loop `" `T.append` T.show lhs `T.append` " detected to have different output types.") >>=
+                          (T.putStrLn $ "while: While loop `" `T.append` T.show lhs `T.append` " detected to have different output types.") >>=
                           \_ -> return Nothing
-                      Just (fbs, mf, f) ->
-                        if val2typ f == val2typ l
-                        then return $ Just (fbs, mf, Arr' (val2typ l) [l, f])
-                        else
-                          (T.putStrLn $ "While loop `" `T.append` T.show lhs `T.append` " detected to have different output types.") >>=
-                          \_ -> return Nothing
+                      Just (_, _, _) -> T.putStrLn "while: branch should not be reachable." >>= \_ -> return Nothing
+                        -- if val2typ f == val2typ l || f == Arr' Tany []
+                        -- then return $ Just (fbs, mf, Arr' (val2typ l) [l, f])
+                        -- else
+                        --   (T.putStrLn $ "While loop `" `T.append` T.show lhs `T.append` " detected to have different output types.") >>=
+                        --   \_ -> return Nothing
                       -- Just (fbs, mf, Tup' f) -> return $ Just (fbs, mf, Tup' (l:f))
                       -- Just (fbs, mf,      f) -> return $ Just (fbs, mf, Tup' [l, f])
-        Just (_, mr, Bln' False) -> return $ Just (False, mr, Tup' [])
+        Just (_, mr, Bln' False) -> return $ Just (False, mr, Arr' Tany [])
         _ -> return Nothing
 
 -- Deals with for (initialize, predicate, increment) loops.
@@ -1451,9 +1501,9 @@ frl gbs etp mem lhs rhs = do
                   (whl ibs etp im (Expression 0 "," (Operand expression) inc) pdc) >>=
                   (\out -> case out of {Nothing -> return Nothing; Just (obs, om, ov) -> return $ Just (obs, drop 1 om, ov)})
             _ ->
-              (T.putStrLn $ "Invalid for loop syntax at `" `T.append` T.show (parse mem predicate) `T.append` "`.")
+              (T.putStrLn $ "for: Invalid for loop syntax at `" `T.append` T.show (parse mem predicate) `T.append` "`.")
               >>= (\_ -> return Nothing)
-        _ -> (T.putStrLn $ "Invalid for loop syntax at `" `T.append` T.show (flatten rhs) `T.append` "`.") >>= (\_ -> return Nothing)
+        _ -> (T.putStrLn $ "for: Invalid for loop syntax at `" `T.append` T.show (flatten rhs) `T.append` "`.") >>= (\_ -> return Nothing)
     _ -> do
       case rhs of
         Expression _ "," (Expression _ "," ini pdc) inc -> do
@@ -1464,7 +1514,7 @@ frl gbs etp mem lhs rhs = do
               (whl ibs etp im (Expression 0 "," lhs inc) pdc) >>=
               (\out -> case out of {Nothing -> return Nothing; Just (obs, om, ov) -> return $ Just (obs, drop 1 om, ov)})
         _ ->
-          (T.putStrLn $ "Invalid for loop syntax at `" `T.append` T.show (flatten rhs) `T.append` "`.")
+          (T.putStrLn $ "for: Invalid for loop syntax at `" `T.append` T.show (flatten rhs) `T.append` "`.")
           >>= (\_ -> return Nothing)
 
 -- Deals with foreach (variable, list of values) loops.
@@ -1512,7 +1562,7 @@ fre gbs _ mem lhs rhs =
                   if dupes (map val2typ vs)
                   then return $ Just (b, m, Arr' (val2typ v) $ reverse vs)
                   else
-                    (T.putStrLn $ "For each loop `" `T.append` T.show expression `T.append` "` found to have different output types.") >>=
+                    (T.putStrLn $ "foreach: For each loop `" `T.append` T.show expression `T.append` "` found to have different output types.") >>=
                     \_ -> return Nothing
                 Just (b, m, []) -> return $ Just (b, m, Arr' Tany $ [])
             _ -> return Nothing
@@ -1557,7 +1607,7 @@ fre gbs _ mem lhs rhs =
               if dupes (map val2typ vs)
               then return $ Just (b, m, Arr' (val2typ v) $ reverse vs)
               else
-                (T.putStrLn $ "For each loop `" `T.append` T.show lhs `T.append` "` found to have different output types.") >>=
+                (T.putStrLn $ "foreach: For each loop `" `T.append` T.show lhs `T.append` "` found to have different output types.") >>=
                 \_ -> return Nothing
             Just (b, m, []) -> return $ Just (b, m, Arr' Tany $ [])
         _ -> return Nothing
@@ -1630,7 +1680,27 @@ asn gbs _ mem lhs rhs = do
       right <-
         case exp2typ mem rhs of
           Nothing -> return Nothing
-          Just t -> interpret gbs t mem rhs
+          Just t ->
+            case getMem mem vname of
+              Just (Val v) ->
+                case v of
+                  Left vt ->
+                    if vt == t
+                    then
+                      interpret gbs t mem rhs
+                    else do
+                      T.putStrLn $ "Can't assign to  variable `" `T.append` vname `T.append` "`. (Type mismatch)"
+                      return Nothing
+                  Right l ->
+                    if val2typ l == t
+                    then
+                      interpret gbs t mem rhs
+                    else do
+                      T.putStrLn $ "Can't assign to  variable `" `T.append` vname `T.append` "`. (Type mismatch)"
+                      return Nothing
+              _ -> do
+                T.putStrLn $ "Can't assign to  variable `" `T.append` vname `T.append` "`. (Type mismatch)"
+                return Nothing
       case right of
         Nothing -> return Nothing
         Just (rbs, mr, r) ->
@@ -1662,7 +1732,7 @@ asn gbs _ mem lhs rhs = do
       if lset == Operand (Tup [])
       then do
         right <-
-          case exp2typ mem rhs of
+            case exp2typ mem rhs of
             Nothing -> return Nothing
             Just t -> interpret gbs t mem rhs
         case right of
@@ -1690,6 +1760,31 @@ asn gbs _ mem lhs rhs = do
       else
         T.putStrLn "Set operation's left-hand side is not empty." >>=
         \_ -> return Nothing
+    Expression _ "let" llet@(Operand (Tup [tp, Str vname])) rlet -> do
+      right <-
+        case compoundType tp of
+          Nothing -> return Nothing
+          Just vt ->
+            case exp2typ mem rhs of
+                Nothing -> return Nothing
+                Just t ->
+                  if vt == t
+                  then
+                    interpret gbs t mem rhs
+                  else do
+                    T.putStrLn $ "Can't assign to  variable `" `T.append` vname `T.append` "`. (Type mismatch)"
+                    return Nothing
+        -- case exp2typ mem rhs of
+          -- Nothing -> return Nothing
+          -- Just t -> interpret gbs t mem rhs
+      case right of
+        Nothing -> return Nothing
+        Just (rbs, mr, r) -> do
+          -- This feels so icky I don't know why.
+          left <- var rbs (val2typ r) mr llet rlet
+          case left of
+            Just (lbs, ml, Str' l) -> return $ Just (lbs, insertVar l r ml, Tup' [])
+            _ -> return Nothing
     Expression _ "let" llet rlet -> do
       right <-
         case exp2typ mem rhs of
@@ -2067,6 +2162,26 @@ exe gbs _ mem lhs rhs =
             return $ maybe Nothing (\x -> Just (rbs, mr, Str' x)) out
       _ -> return Nothing
     -- return Nothing
+  where
+    cap :: Value -> IO (Maybe T.Text)
+    cap v = do
+      o <- cmd v
+      case o of
+        Nothing -> return Nothing
+        Just (out, procHand) -> do
+          output <- do
+            -- hSetBuffering out NoBuffering
+            hSetBinaryMode out True
+            B.hGetContents out
+          -- copyHandleData out stdout
+          -- DEBUG
+          -- putStr output
+          exitCode <- waitForProcess procHand
+          if exitCode /= ExitSuccess
+          then T.putStrLn $ "Process " `T.append` T.show v `T.append` " exited with exit code: " `T.append` T.show exitCode
+          else return ()
+          -- Bash does this too. Might as well, since I don't want my args to contain newlines.
+          return $ Just (T.unwords $ T.words $ T.decodeUtf8Lenient output)
 
 -- Also highly inefficient.
 with :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
@@ -2095,7 +2210,7 @@ with gbs _ mem lhs rhs = do
                 ) r
               cmd l
             `catch`
-            (\(e :: IOError) -> T.putStrLn $ "with: " `T.append` T.show e)
+            (\(e :: IOError) -> T.putStrLn ("with: " `T.append` T.show e) >>= \_ -> return Nothing)
           _ <-
             do
               newenv <- getEnvironment

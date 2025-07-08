@@ -76,10 +76,11 @@ mainLoop gbs mem = do
           checkendline x =
             case x of
               Operand _          -> Expression 0 "," (Operand $ Tup []) x
-              Expression _ o _ _ ->
-                if o `elem` ["|", "&", "$", ",", "cmd"]
-                then x
-                else Expression 0 "," (Operand $ Tup []) x
+              Expression _ _ _ _ ->
+                -- if o `elem` ["|", "&", "$", ",", "cmd"]
+                -- then x
+                -- else Expression 0 "," (Operand $ Tup []) x
+                Expression 0 "," (Operand $ Tup []) x
         result <- ((interpret gbs Tany mem) . (checkendline) . parse mem) tokens
         case result of
           Just (nbs, newmem, out) -> do

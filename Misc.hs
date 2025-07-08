@@ -125,7 +125,24 @@ matching x =
     '(' -> ')'
     '{' -> '}'
     '[' -> ']'
+    '<' -> '>'
+    ')' -> '('
+    '}' -> '{'
+    ']' -> '['
+    '>' -> '<'
     _ -> x
+
+splitInside :: Integer -> Char -> T.Text -> Maybe (T.Text, T.Text)
+splitInside _ _ T.Empty = Nothing
+splitInside acc opener (x T.:< txt) =
+  if x `matches` opener
+  then if acc == 1 then return (T.Empty, txt) else next (-1)
+  else if x == opener then next 1 else next 0
+  where
+    next i =
+      case splitInside (acc + i) opener txt of
+        Nothing -> Nothing
+        Just (front, back) -> Just (x T.:< front, back)
 
 matches :: Char -> Char -> Bool
 matches a b = (matching a) == b
