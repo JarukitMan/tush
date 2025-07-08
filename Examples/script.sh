@@ -6,13 +6,15 @@ echo "That's
 Crazy."
 1 + 2 - 3 * 4 + 5 #implicit echo
 
-for i in 0..10 {
+_ = for i in 0..10 {
 	while i < 1000 {
 		echo -n i
 		i = i + 1
+		return 0
 	}
 	else {
 		echo "done"
+		return 0
 	}
 }
 
@@ -33,5 +35,5 @@ foreach (char, 'a'..'z') {
 }
 
 That's cool.
-This's' not cool...
+This's' "not cool..."
 ls

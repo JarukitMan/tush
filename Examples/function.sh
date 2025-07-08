@@ -5,25 +5,26 @@ opr Int a (Chr b Str c) something_impractical Int d = {
   return a + d }
 
 1 ('a' "Boom") something_impractical 10
-not_valid_yet("Bang!")
+# not_valid_yet("Bang!")
 
 let a = 7.0
 let b = 99.0
 
-opr main Any unused = {
+opr main = {
   opr Flt a insideAdd Flt b = {
     a + b
   }
 
   a insideAdd b
+  echo MAIN DONE
 }
 
 opr not_valid_yet Str word = {
   echo word
 }
 
-(10)insideAdd (11)
-main
+# (10)insideAdd (11)
+(main)
 
 # You can kind of assign return types like this. Kind of. Composite types aren't allowed.
 opr fib Int n = int (
