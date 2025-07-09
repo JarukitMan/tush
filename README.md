@@ -14,8 +14,8 @@ Shipped alongside the Erminal, (hopefully).
 ___
 
 ## Dependencies
-- [cabal] (https://www.haskell.org/cabal/)
-- [vty] (https://github.com/jtdaugherty/vty)
+- [cabal] (https://www.haskell.org/cabal/) (Cause I don't know how to use vty without it... If you can do that, you can just GHC this software.)
+- [vty] (https://github.com/jtdaugherty/vty) (I'm not reimplementing curses.)
 
 ## Abnormalities:
 

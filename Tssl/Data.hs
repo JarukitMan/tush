@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Tssl.Data where
 
 import qualified Data.Map.Strict as M

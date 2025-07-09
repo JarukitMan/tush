@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Tssl.Operators where
 
 import Misc

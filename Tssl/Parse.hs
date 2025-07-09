@@ -1,4 +1,4 @@
-module Tssl.Parse where
+module Tssl.Parse(parse) where
 -- module Tssl.Parse(parse) where
 -- Only exposes parse
 
@@ -104,6 +104,6 @@ insert left@(Operand opr) x =
 
 -- The body of the tree function. Inserts children on the right,
 -- may move parts of acc to be its left child based on rank.
-treeify :: Expression -> [Token] -> Expression
-treeify acc []     = acc
-treeify acc (x:xs) = treeify (insert acc x) xs
+-- treeify :: Expression -> [Token] -> Expression
+-- treeify acc []     = acc
+-- treeify acc (x:xs) = treeify (insert acc x) xs

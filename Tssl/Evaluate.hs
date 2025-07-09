@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Tssl.Evaluate where
 -- import Tssl.Token
 import Tssl.Data

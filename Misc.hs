@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Misc where
 -- import qualified Data.ByteString.Char8 as B
 import qualified Data.Text as T

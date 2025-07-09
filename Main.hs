@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 import qualified System.Environment as Env
 import Tssl.Token
 import Tssl.Data

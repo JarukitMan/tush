@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Tssl.Token(tokenize) where
 import Misc
 -- import qualified Data.Map as M 
@@ -54,8 +55,8 @@ chunkify list@(x T.:< xs)
     (rest, unchunked) <- chunkify xs
     Right (Word ",":rest, unchunked)
   |
-  x `T.elem` ":|." = do
-  -- x `elem` ":|." = do
+  x `T.elem` ":|" = do
+  -- x `elem` ":|" = do
     (rest, unchunked) <- chunkify xs
     Right (Word (T.singleton x):rest, unchunked)
   |
@@ -90,13 +91,30 @@ chunkify list@(x T.:< xs)
     else Left "Unclosed Left Array Delimiter \"[]\""
   |
   otherwise = do
-    let (front, back) = splitEsc (`T.elem` " \t\r\n,{}()[]:.|") list
-    (rest, unchunked) <- chunkify back
+    let (front, back) = splitEscEx (`T.elem` " \t\r\n,{}()[]:|") list
+    case back of
+      _ -> do
+        (rest, unchunked) <- chunkify back
+        Right (Word front:rest, unchunked)
     -- -- I'll just check for floats here screw it.
-    case rest of
-      (Word ".":Word next:rest') -> Right $ (Word (front `T.append` ('.' `T.cons` next)):rest', unchunked)
-      _ -> Right $ (Word front:rest, unchunked)
+    -- case rest of
+    --   (Word ".":Word next:rest') -> Right $ (Word (front `T.append` ('.' `T.cons` next)):rest', unchunked)
+    --   _ -> Right $ (Word front:rest, unchunked)
     -- Right (Word front:rest, unchunked)
+  where
+    splitEscEx :: (Char -> Bool) -> T.Text -> (T.Text, T.Text)
+    -- Just copied from misc with an extra condition of ".."
+    splitEscEx _ ('.' T.:< '.' T.:< ts) = (T.Empty, ".." `T.append` ts)
+    splitEscEx _ T.Empty = (T.Empty, T.Empty)
+    splitEscEx f ('\\' T.:< t T.:< ts) =
+      (toEsc t T.:< front, back)
+      where (front, back) = splitEscEx f ts
+    splitEscEx f l@(t T.:< ts) =
+      if f t
+      then (T.empty, l)
+      else (T.cons t front, back)
+      where (front, back) = splitEscEx f ts
+
 
 fmtChunk :: T.Text -> Either T.Text ([Chunk], T.Text)
 -- fmtChunk [] = Left "Unclosed Formatted String"
