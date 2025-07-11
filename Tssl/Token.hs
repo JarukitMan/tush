@@ -156,8 +156,8 @@ checkWord memory x =
     checkType x' =
       case getMem memory x' of
         Just (Op r _) -> Opr r x'
-        Just (Val _)        -> Var x'
-        Nothing               ->
+        Just (Val  _) -> Var   x'
+        Nothing       ->
           case pmtMaybe x' of
             Just typ -> Typ typ
             Nothing  ->
@@ -169,7 +169,7 @@ checkWord memory x =
                     Nothing  ->
                       case fltMaybe x' of
                         Just flt -> Flt flt
-                        Nothing ->
+                        Nothing  ->
                           case pthMaybe x' of
                             Just pth -> Pth pth
                             Nothing  -> Wrd x'

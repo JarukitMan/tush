@@ -1,11 +1,9 @@
 # FIX:
-- Make it so the right side isn't evaluated if the types don't match in assignment.
 - Find a way to deal with "," and tuple appending/dropping type signatures.
        ^ Might have to dabble into Template Haskell. (decision inspired by [https://hackage.haskell.org/package/tuple-append])
-- Implement Out', wait for processes at ",", and just pass on for pipes and stuff. Things that don't involve processes just... wait for it to end and not capture anything.
-  Fix handletup and preeeeeetty much everything else to wait for Out' first.
 
 # TODO:
+- Implement internalMatch for Grr.Regex.
 - Implement Grr.
 - Implement Imp.
 - Implement Tsf.

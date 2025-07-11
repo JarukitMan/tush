@@ -9,6 +9,7 @@ import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as T
+import qualified Data.Text.Encoding.Error as T
 import Misc
 import System.Process
 import System.IO
@@ -325,10 +326,10 @@ compoundType :: Token -> Maybe Type
 compoundType tok =
   case tok of
     Typ t  -> Just t
-    Arr ts -> do
+    Arr ts@(_:_) -> do
       typs <- sequence $ map compoundType ts
       Just $ Tarr $ tCollapse (Ttup typs)
-    Tup ts -> do
+    Tup ts@(_:_) -> do
       typs <- sequence $ map compoundType ts
       Just $ tCollapse (Ttup typs)
     _ -> Nothing
@@ -620,7 +621,7 @@ argIO vals =
           then T.putStrLn $ "Process " `T.append` T.show v `T.append` " exited with exit code: " `T.append` T.show exitCode
           else return ()
           -- Bash does this too. Might as well, since I don't want my args to contain newlines.
-          return $ Just (T.unwords $ T.words $ T.decodeUtf8Lenient output)
+          return $ Just (T.unwords $ T.words $ T.decodeUtf8With T.lenientDecode output)
   -- (
   --   sequence $
   --   map
@@ -644,7 +645,7 @@ cmd val =
     Tup' (command:args) -> exec command args
     Arr' _ (command:args) -> exec command args
     Str' command          -> exec (Str' command) []
-    Pth' command          -> exec (Pth' command) []
+    -- Pth' command          -> exec (Pth' command) []
     _ -> putStrLn (show val) >>= \_ -> return Nothing
   where
     handler :: IOError -> IO (Maybe (Handle, ProcessHandle))
@@ -693,7 +694,7 @@ cmd val =
           then T.putStrLn $ "Process " `T.append` T.show v `T.append` " exited with exit code: " `T.append` T.show exitCode
           else return ()
           -- Bash does this too. Might as well, since I don't want my args to contain newlines.
-          return $ Just (T.unwords $ T.words $ T.decodeUtf8Lenient output)
+          return $ Just (T.unwords $ T.words $ T.decodeUtf8With T.lenientDecode output)
 
 -- cmdConc :: Value -> IO ()
 -- cmdConc val =

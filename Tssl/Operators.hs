@@ -10,6 +10,7 @@ import Data.List
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as T
+import qualified Data.Text.Encoding.Error as T
 import qualified Data.ByteString as B
 -- import Data.Word(Word8)
 import qualified Data.Map as M
@@ -74,8 +75,10 @@ add gbs etp mem lhs rhs = do
                 exists <- doesPathExist dir
                 if exists
                 then do
-                  files <- listDirectory dir
+                  fs <- listDirectory dir
+                  files <- sequence $ map canonicalizePath fs
                   let fcycle = cycle files
+                  putStrLn $ show $ (dropWhile (/= a) fcycle) !! (fromInteger b)
                   return $ Just (rbs, mr, Pth' $ (dropWhile (/= a) fcycle) !! (fromInteger b))
                 else do
                   putStrLn $ "Directory " ++ a ++ " does not exist."
@@ -161,7 +164,9 @@ sub gbs etp mem lhs rhs = do
                 exists <- doesPathExist dir
                 if exists
                 then do
-                  files <- listDirectory dir
+                  -- files <- listDirectory dir
+                  fs <- listDirectory dir
+                  files <- sequence $ map canonicalizePath fs
                   let fcycle = cycle files
                   return $ Just (rbs, mr, Pth' $ (dropWhile (/= a) fcycle) !! (fromInteger b))
                 else do
@@ -464,11 +469,11 @@ next gbs etp mem lhs rhs = catch (do
           -- Arr' Tstr (x:_)   -> execOr $ show x
           -- Str' _            -> cmdWait a
           Tup' ((Str' x):xs) -> exec (T.unpack x) xs
-          Arr' Tstr (x:xs)       -> exec (show x) xs
+          -- Arr' Tstr (x:xs)       -> exec (show x) xs
           -- Because they aren't necessarily in PATH
           Pth' x            -> exec x []
           Tup' ((Pth' x):xs) -> exec x xs
-          Arr' Tpth (x:xs)       -> exec (show x) xs
+          -- Arr' Tpth (x:xs)       -> exec (show x) xs
           Out' o _          -> do
             (_, _, _, process) <- createProcess (proc "cat" []) {std_in = UseHandle o}
             -- FIXME: Worst code I have ever written to date.
@@ -550,11 +555,11 @@ also gbs etp mem lhs rhs = catch (do
           -- Arr' Tstr (x:_)   -> execOr $ show x
           -- Str' _            -> cmdConc a >>= \_ -> return $ Tup' []
           Tup' ((Str' _):_) -> cmd a >>= \_ -> return $ Tup' []
-          Arr' Tstr _       -> cmd a >>= \_ -> return $ Tup' []
+          -- Arr' Tstr _       -> cmd a >>= \_ -> return $ Tup' []
           -- Because they aren't necessarily in PATH
           Pth' _            -> cmd a >>= \_ -> return $ Tup' []
           Tup' ((Pth' _):_) -> cmd a >>= \_ -> return $ Tup' []
-          Arr' Tpth _       -> cmd a >>= \_ -> return $ Tup' []
+          -- Arr' Tpth _       -> cmd a >>= \_ -> return $ Tup' []
           _ -> return a
           -- where
           --   execOr x = do
@@ -711,7 +716,7 @@ here gbs _ mem lhs rhs = (do
                       if exitcode /= ExitSuccess
                       then T.putStrLn $ "Process " `T.append` x `T.append` (T.unwords larg) `T.append` " exited with exit code: " `T.append` T.show exitcode
                       else return ()
-                      return $ Just (lbs, ml, Str' $ T.decodeUtf8Lenient txt)
+                      return $ Just (lbs, ml, Str' $ T.decodeUtf8With T.lenientDecode txt)
                     _ -> do
                       T.putStrLn $ "Could not create process " `T.append` x `T.append` (T.unwords larg) `T.append` " properly."
                       return Nothing
@@ -743,7 +748,7 @@ here gbs _ mem lhs rhs = (do
           then T.putStrLn $ "Process " `T.append` T.show v `T.append` " exited with exit code: " `T.append` T.show exitCode
           else return ()
           -- Bash does this too. Might as well, since I don't want my args to contain newlines.
-          return $ Just (T.unwords $ T.words $ T.decodeUtf8Lenient output)
+          return $ Just (T.unwords $ T.words $ T.decodeUtf8With T.lenientDecode output)
 
 wrt :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
 wrt gbs _ mem lhs rhs = do
@@ -930,7 +935,8 @@ range gbs _ mem lhs rhs = do
                   exists <- doesPathExist parentA
                   if exists
                   then do
-                    files <- listDirectory ('/':parentA)
+                    fs <- listDirectory ('/':parentA)
+                    files <- sequence $ map canonicalizePath fs
                     let fcycle = cycle files
                     return $ Just (rbs, mr, Arr' Tpth $ map (Pth') (takeWhile (/= b) (dropWhile (/= a) fcycle)))
                   else do
@@ -1657,9 +1663,9 @@ var gbs etp mem lhs rhs =
   else (T.putStrLn "Let statement's left-hand side is not empty.") >>= \_ -> return Nothing
 
 opr :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
-opr _ _ _ _ _ =
+opr _ _ mem _ _ =
   T.putStrLn "The current implementation of Turtle Shell Scripting Language does not allow for operation declaration without definition yet." >>=
-  -- \_ -> putStrLn (show (map (M.filter (\x -> case x of Op _ _ -> True ; _ -> False)) mem)) >>=
+  \_ -> putStrLn (show (map (M.filter (\x -> case x of Op _ _ -> True ; _ -> False)) mem)) >>=
   \_ -> return Nothing
 
 -- Eval right, then check left if it needs evaluation, if it doesn't then check type of left, then assign (or not).
@@ -1809,12 +1815,13 @@ asn gbs _ mem lhs rhs = do
       then do
         let
           typish :: Token -> Bool
-          typish tok = if compoundType tok == Nothing then False else True
+          typish tok = compoundType tok /= Nothing
           -- This one doesn't check for invalid things yet. (stuff that aren't types or names)
           splitOp :: [Token] -> Maybe ([Token], T.Text, [Token])
           -- splitOp (Wrd left:Wrd opname:right) = Just ([Wrd left], opname, right)
           -- splitOp (Var left:Wrd opname:right) = Just ([Wrd left], opname, right)
           splitOp (Wrd opname:right) = Just ([], opname, right)
+          splitOp (Var opname:right) = Just ([], opname, right)
           splitOp (Opr _ opname:right) = Just ([], opname, right)
           splitOp (Typ x1:Wrd x2:xs) =
             case splitOp xs of
@@ -1842,7 +1849,13 @@ asn gbs _ mem lhs rhs = do
           --     Nothing -> Nothing
           --     Just (l, s, r) -> Just (x:l, s, r)
           splitOp (x1:Var x2:xs) = splitOp (x1:Wrd x2:xs)
+          splitOp (x1:Opr _ x2:xs) = splitOp (x1:Wrd x2:xs)
           splitOp _ = Nothing
+          -- I don't think I need this, seems jank too.
+          -- splitOp xs =
+          --   case splitWith (\x -> case x of {Opr _ _ -> True; _ -> False}) xs of
+          --     (left, (Opr _ opname:right)) -> Just (left, opname, right)
+          --     _ -> Nothing
           tok2pair :: [Token] -> Maybe (VarTree, Type)
           tok2pair (tok:Var v:ts) = tok2pair (tok:Wrd v:ts)
           tok2pair (tok:Wrd v:ts) =
@@ -2095,7 +2108,9 @@ asn gbs _ mem lhs rhs = do
                   _ ->
                     (T.putStrLn $ "Can't parse operator names/types in declaration `" `T.append` T.show ts `T.append` "`.") >>=
                     \_ -> return  Nothing
-          expr@(Expression _ _ _ _)  ->
+          expr@(Expression _ _ _ _)  -> do
+            -- DEBUG
+            -- T.putStrLn $ T.show $ flatten expr
             asn gbs Tany mem (Expression 4 "opr" (Operand $ Tup []) (Operand $ Tup $ flatten expr)) rhs
           _ ->
             (T.putStrLn $ "Operator construction can't be parsed.") >>=
@@ -2182,7 +2197,7 @@ exe gbs _ mem lhs rhs =
           then T.putStrLn $ "Process " `T.append` T.show v `T.append` " exited with exit code: " `T.append` T.show exitCode
           else return ()
           -- Bash does this too. Might as well, since I don't want my args to contain newlines.
-          return $ Just (T.unwords $ T.words $ T.decodeUtf8Lenient output)
+          return $ Just (T.unwords $ T.words $ T.decodeUtf8With T.lenientDecode output)
 
 -- Also highly inefficient.
 with :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
