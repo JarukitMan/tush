@@ -527,15 +527,15 @@ initmem =
         -- Might bump to 255 later.
         ("$", Op 254
           (
-            insertOp (Tarr $ Ttup [Tstr, Tstr], Tany) (Base exe Tstr) $
-            insertOp (Ttup [], Tany) (Base exe Tstr)
+            insertOp (Tarr $ Ttup [Tstr, Tstr], Tany) (Base exe $ Tarr Tstr) $
+            insertOp (Ttup [], Tany) (Base exe $ Tarr Tstr)
             (empty, Nothing)
           )
         ),
         ("cmd", Op 254
           (
-            insertOp (Tarr $ Ttup [Tstr, Tstr], Tany) (Base exe Tstr) $
-            insertOp (Ttup [], Tany) (Base exe Tstr)
+            insertOp (Tarr $ Ttup [Tstr, Tstr], Tany) (Base exe $ Tarr Tstr) $
+            insertOp (Ttup [], Tany) (Base exe $ Tarr Tstr)
             (empty, Nothing)
           )
         ),

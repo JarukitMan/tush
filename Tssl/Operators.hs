@@ -2135,7 +2135,7 @@ exe gbs _ mem lhs rhs =
       Nothing -> return Nothing
       Just (rbs, mr, r) ->
         (cap r) >>=
-        (\out -> return $ maybe Nothing (\x -> Just (rbs, mr, Str' x)) out)
+        (\out -> return $ maybe Nothing (\xs -> Just (rbs, mr, Arr' Tstr (map Str' xs))) out)
   else do
   -- I just copied "with" and replaced cmd with cap.
     left <- interpret gbs Tany mem lhs
@@ -2164,7 +2164,7 @@ exe gbs _ mem lhs rhs =
               `catch`
               (
                 \(e :: IOError) -> do
-                  T.putStrLn $ "with: " `T.append` T.show e
+                  T.putStrLn $ "cmd: " `T.append` T.show e
                   return Nothing
               )
             _ <-
@@ -2174,12 +2174,12 @@ exe gbs _ mem lhs rhs =
                 _ <- sequence $ map (\(n, v) -> setEnv n v) oldenv
                 return ()
               `catch`
-              (\(e :: IOError) -> T.putStrLn $ "with: " `T.append` T.show e)
-            return $ maybe Nothing (\x -> Just (rbs, mr, Str' x)) out
+              (\(e :: IOError) -> T.putStrLn $ "cmd: " `T.append` T.show e)
+            return $ maybe Nothing (\xs -> Just (rbs, mr, Arr' Tstr (map Str' xs))) out
       _ -> return Nothing
     -- return Nothing
   where
-    cap :: Value -> IO (Maybe T.Text)
+    cap :: Value -> IO (Maybe [T.Text])
     cap v = do
       o <- cmd v
       case o of
@@ -2197,7 +2197,7 @@ exe gbs _ mem lhs rhs =
           then T.putStrLn $ "Process " `T.append` T.show v `T.append` " exited with exit code: " `T.append` T.show exitCode
           else return ()
           -- Bash does this too. Might as well, since I don't want my args to contain newlines.
-          return $ Just (T.unwords $ T.words $ T.decodeUtf8With T.lenientDecode output)
+          return $ Just (T.words $ T.decodeUtf8With T.lenientDecode output)
 
 -- Also highly inefficient.
 with :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))

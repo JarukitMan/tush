@@ -586,16 +586,18 @@ argIO vals =
             case out of
               Nothing -> return []
               Just txt -> return (T.words txt)
-          Arr' Tstr _ -> do
-            out <- cap v
-            case out of
-              Nothing -> return []
-              Just txt -> return (T.words txt)
-          Arr' Tpth _ -> do
-            out <- cap v
-            case out of
-              Nothing -> return []
-              Just txt -> return (T.words txt)
+          Arr' Tstr xs -> return (map T.show xs)
+          Arr' Tpth xs -> return (map T.show xs)
+          -- Arr' Tstr _ -> do
+          --   out <- cap v
+          --   case out of
+          --     Nothing -> return []
+          --     Just txt -> return (T.words txt)
+          -- Arr' Tpth _ -> do
+          --   out <- cap v
+          --   case out of
+          --     Nothing -> return []
+          --     Just txt -> return (T.words txt)
           Tup' [] -> return []
           _        -> return [T.show v]
     )
