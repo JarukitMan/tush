@@ -162,9 +162,10 @@ interpret b _ mem (Operand x) =
           T.putStrLn $ "Formatted String `" `T.append` T.show x `T.append` "` cannot be evaluated."
           return Nothing
         -- Just (mem', fmt') -> return $ Just (mem', Str' $ concat $ map show fmt')
-        Just (b', mem', fmt') -> do
-          fmt'' <- argIO (map vCollapse fmt')
-          return $ Just (b', mem', Str' $ T.concat $ (fmt''))
+        Just (b', mem', fmt') -> return $ Just (b', mem', Str' $ T.concat (argify $ Tup' fmt'))
+        -- Just (b', mem', fmt') -> do
+          -- fmt'' <- argIO (map vCollapse fmt')
+          -- return $ Just (b', mem', Str' $ T.concat $ (fmt''))
     where
       handletup :: [Token] -> IO (Maybe (Bool, Memory, [Value]))
       handletup xs =

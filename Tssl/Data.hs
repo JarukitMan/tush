@@ -5,15 +5,15 @@ import qualified Data.Map.Strict as M
 import Data.Char(ord)
 import Data.Word(Word8)
 import Data.List(intercalate)
-import qualified Data.ByteString as B
+-- import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import qualified Data.Text.Encoding as T
-import qualified Data.Text.Encoding.Error as T
+-- import qualified Data.Text.Encoding as T
+-- import qualified Data.Text.Encoding.Error as T
 import Misc
 import System.Process
 import System.IO
-import System.Exit
+-- import System.Exit
 -- import System.Environment
 import Control.Exception
 
@@ -568,74 +568,74 @@ argify val =
     Out' _ _ -> [] 
 
 -- Wanna make it better, but I don't know how.
-argIO :: [Value] -> IO [T.Text]
-argIO vals =
-  (
-    sequence $ map
-    (
-      \v ->
-        -- This doesn't let people do f"Hi {ls}", so maybe I'll add a cmd operator or something?
-        case vCollapse v of
-          Tup' (Str' _:_)   -> do
-            out <- cap v
-            case out of
-              Nothing -> return []
-              Just txt -> return (T.words txt)
-          Tup' (Pth' _:_)   -> do
-            out <- cap v
-            case out of
-              Nothing -> return []
-              Just txt -> return (T.words txt)
-          Arr' Tstr xs -> return (map T.show xs)
-          Arr' Tpth xs -> return (map T.show xs)
-          -- Arr' Tstr _ -> do
-          --   out <- cap v
-          --   case out of
-          --     Nothing -> return []
-          --     Just txt -> return (T.words txt)
-          -- Arr' Tpth _ -> do
-          --   out <- cap v
-          --   case out of
-          --     Nothing -> return []
-          --     Just txt -> return (T.words txt)
-          Tup' [] -> return []
-          _        -> return [T.show v]
-    )
-    vals
-  ) >>=
-  (\x -> return $ concat x)
-  where
-    cap :: Value -> IO (Maybe T.Text)
-    cap v = do
-      o <- cmd v
-      case o of
-        Nothing -> return Nothing
-        Just (out, procHand) -> do
-          output <- do
-            -- hSetBuffering out NoBuffering
-            hSetBinaryMode out True
-            B.hGetContents out
-          -- copyHandleData out stdout
-          -- DEBUG
-          -- putStr output
-          exitCode <- waitForProcess procHand
-          if exitCode /= ExitSuccess
-          then T.putStrLn $ "Process " `T.append` T.show v `T.append` " exited with exit code: " `T.append` T.show exitCode
-          else return ()
-          -- Bash does this too. Might as well, since I don't want my args to contain newlines.
-          return $ Just (T.unwords $ T.words $ T.decodeUtf8With T.lenientDecode output)
-  -- (
-  --   sequence $
-  --   map
-  --   (
-  --     \v ->
-  --       case v of
-  --         Tup' _   -> cap v
-  --         Arr' _ _ -> cap v
-  --         _        -> return $ Just $ show v
-  --   ) vals
-  -- ) >>=
-  -- (\outs -> return $ catMaybes outs)   Tup' tup -> concat $ map argify tup
+-- argIO :: [Value] -> IO [T.Text]
+-- argIO vals =
+--   (
+--     sequence $ map
+--     (
+--       \v ->
+--         -- This doesn't let people do f"Hi {ls}", so maybe I'll add a cmd operator or something?
+--         case vCollapse v of
+--           Tup' (Str' _:_)   -> do
+--             out <- cap v
+--             case out of
+--               Nothing -> return []
+--               Just txt -> return txt
+--           Tup' (Pth' _:_)   -> do
+--             out <- cap v
+--             case out of
+--               Nothing -> return []
+--               Just txt -> return txt
+--           Arr' Tstr xs -> return (map T.show xs)
+--           Arr' Tpth xs -> return (map T.show xs)
+--           -- Arr' Tstr _ -> do
+--           --   out <- cap v
+--           --   case out of
+--           --     Nothing -> return []
+--           --     Just txt -> return (T.words txt)
+--           -- Arr' Tpth _ -> do
+--           --   out <- cap v
+--           --   case out of
+--           --     Nothing -> return []
+--           --     Just txt -> return (T.words txt)
+--           Tup' [] -> return []
+--           _        -> return [T.show v]
+--     )
+--     vals
+--   ) >>=
+--   (\x -> return $ concat x)
+--   where
+--     cap :: Value -> IO (Maybe [T.Text])
+--     cap v = do
+--       o <- cmd v
+--       case o of
+--         Nothing -> return Nothing
+--         Just (out, procHand) -> do
+--           output <- do
+--             -- hSetBuffering out NoBuffering
+--             hSetBinaryMode out True
+--             B.hGetContents out
+--           -- copyHandleData out stdout
+--           -- DEBUG
+--           -- putStr output
+--           exitCode <- waitForProcess procHand
+--           if exitCode /= ExitSuccess
+--           then T.putStrLn $ "Process " `T.append` T.show v `T.append` " exited with exit code: " `T.append` T.show exitCode
+--           else return ()
+--           -- Bash does this too. Might as well, since I don't want my args to contain newlines.
+--           return $ Just (T.words $ T.decodeUtf8With T.lenientDecode output)
+--   -- (
+--   --   sequence $
+--   --   map
+--   --   (
+--   --     \v ->
+--   --       case v of
+--   --         Tup' _   -> cap v
+--   --         Arr' _ _ -> cap v
+--   --         _        -> return $ Just $ show v
+--   --   ) vals
+--   -- ) >>=
+--   -- (\outs -> return $ catMaybes outs)   Tup' tup -> concat $ map argify tup
 -- -- This is exclusively for ",". The other pipers (<-, |, &, ->, =>)
 -- -- use their own functions that either don't inherit some std files or are async.
 -- -- Surrenders the program to an external process.
@@ -644,9 +644,9 @@ cmd :: Value -> IO (Maybe (Handle, ProcessHandle))
 cmd val =
   case val of
     Out' o h              -> return $ Just (o, h)
-    Tup' (command:args) -> exec command args
-    Arr' _ (command:args) -> exec command args
-    Str' command          -> exec (Str' command) []
+    Tup' (command:args) -> exec command (Tup' args)
+    Arr' _ (command:args) -> exec command (Tup' args)
+    Str' command          -> exec (Str' command) (Tup' [])
     -- Pth' command          -> exec (Pth' command) []
     _ -> putStrLn (show val) >>= \_ -> return Nothing
   where
@@ -657,46 +657,51 @@ cmd val =
     exec command args = (exec' command args) `catch` handler
     exec' command args =
       case command of
-        Tup' _   -> do
-          out <- cap command
-          args' <- argIO args
-          case out of
-            Nothing -> return Nothing
-            Just out' -> cproc (T.unpack out') (map T.unpack args')
-        Arr' _ _ -> do
-          out <- cap command
-          args' <- argIO args
-          case out of
-            Nothing -> return Nothing
-            Just out' -> cproc (T.unpack out') (map T.unpack args')
-        _ ->
-          (argIO args) >>=
-          (\args' -> cproc (show command) (map T.unpack args'))
+        Tup' (x:xs) -> cproc (show x) (map show xs ++ map T.unpack (argify args))
+        Arr' _ (x:xs) -> cproc (show x) (map show xs ++ map T.unpack (argify args))
+        _ -> cproc (show command) (map T.unpack (argify args))
+        -- Tup' _   -> do
+        --   out <- cap command
+        --   let args' = argify args
+        --   case out of
+        --     Nothing -> return Nothing
+        --     Just out' -> cproc (T.unpack out') (map T.unpack args')
+        -- Arr' _ _ -> do
+        --   out <- cap command
+        --   -- args' <- argIO args
+        --   let args' = argify args
+        --   case out of
+        --     Nothing -> return Nothing
+        --     Just out' -> cproc (T.unpack out') (map T.unpack args')
+        -- _ ->
+          -- (argIO args) >>=
+          -- (\args' -> cproc (show command) (map T.unpack args'))
+          -- cproc (show command) (map T.unpack (argify args))
     cproc :: String -> [String] -> IO (Maybe (Handle, ProcessHandle))
     cproc x xs = do
       hans <- createProcess (proc x xs) {std_out = CreatePipe}
       case hans of
         (_, Just o, _, h) -> return $ Just (o, h)
         _ -> return Nothing
-    cap :: Value -> IO (Maybe T.Text)
-    cap v = do
-      o <- cmd v
-      case o of
-        Nothing -> return Nothing
-        Just (out, procHand) -> do
-          output <- do
-            -- hSetBuffering out NoBuffering
-            hSetBinaryMode out True
-            B.hGetContents out
-          -- copyHandleData out stdout
-          -- DEBUG
-          -- putStr output
-          exitCode <- waitForProcess procHand
-          if exitCode /= ExitSuccess
-          then T.putStrLn $ "Process " `T.append` T.show v `T.append` " exited with exit code: " `T.append` T.show exitCode
-          else return ()
-          -- Bash does this too. Might as well, since I don't want my args to contain newlines.
-          return $ Just (T.unwords $ T.words $ T.decodeUtf8With T.lenientDecode output)
+    -- cap :: Value -> IO (Maybe T.Text)
+    -- cap v = do
+    --   o <- cmd v
+    --   case o of
+    --     Nothing -> return Nothing
+    --     Just (out, procHand) -> do
+    --       output <- do
+    --         -- hSetBuffering out NoBuffering
+    --         hSetBinaryMode out True
+    --         B.hGetContents out
+    --       -- copyHandleData out stdout
+    --       -- DEBUG
+    --       -- putStr output
+    --       exitCode <- waitForProcess procHand
+    --       if exitCode /= ExitSuccess
+    --       then T.putStrLn $ "Process " `T.append` T.show v `T.append` " exited with exit code: " `T.append` T.show exitCode
+    --       else return ()
+    --       -- Bash does this too. Might as well, since I don't want my args to contain newlines.
+    --       return $ Just (T.unwords $ T.words $ T.decodeUtf8With T.lenientDecode output)
 
 -- cmdConc :: Value -> IO ()
 -- cmdConc val =

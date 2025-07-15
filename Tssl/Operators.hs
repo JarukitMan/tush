@@ -458,8 +458,9 @@ next gbs etp mem lhs rhs = catch (do
     -- didn't mean screwing up the user experience.
     exec :: String -> [Value] -> IO Value
     exec x xs =
-      argIO xs >>=
-      \args -> createProcess (proc x (map T.unpack args)) >>=
+      createProcess (proc x (map T.unpack (argify $ Tup' xs))) >>=
+      -- argIO xs >>=
+      -- \args -> createProcess (proc x (map T.unpack args)) >>=
       \(_, _, _, h) -> waitForProcess h >>=
       \_ -> return $ Tup' []
     check a =
@@ -475,8 +476,8 @@ next gbs etp mem lhs rhs = catch (do
           Tup' ((Pth' x):xs) -> exec x xs
           -- Arr' Tpth (x:xs)       -> exec (show x) xs
           Out' o _          -> do
-            (_, _, _, process) <- createProcess (proc "cat" []) {std_in = UseHandle o}
             -- FIXME: Worst code I have ever written to date.
+            (_, _, _, process) <- createProcess (proc "cat" []) {std_in = UseHandle o}
             exitCode <- waitForProcess process
             -- Screw this, I'm passing it to cat.
             -- output <- do
@@ -622,7 +623,8 @@ pipe gbs _ mem lhs rhs = (do
                 Nothing -> return Nothing
                 -- Nothing -> return $ Just (rbs, mr, Str' $ lout ++ ' ':(show $ vCollapse $ Tup' $ Str' x:xs))
                 Just x''  -> do
-                  rarg <- argIO xs
+                  let rarg = argify (Tup' xs)
+                  -- rarg <- argIO xs
                   case lo of
                     Nothing ->
                       T.putStrLn ("Could not create process " `T.append` (T.pack x) `T.append` (T.unwords rarg) `T.append` " properly.") >>=
@@ -702,7 +704,8 @@ here gbs _ mem lhs rhs = (do
               -- case x' of
               --   Nothing -> return $ Just (lbs, ml, Str' $ rout ++ ' ':(show $ vCollapse $ Tup' $ Str' x:xs))
               --   Just _  -> do
-                  larg <- argIO xs
+                  let larg = argify (Tup' xs)
+                  -- larg <- argIO xs
                   (inp, out, _, landle) <- createProcess (proc (T.unpack x) (map T.unpack larg)) {std_in = CreatePipe, std_out = CreatePipe}
                   case (inp, out) of
                     (Just i, Just o) -> do
@@ -773,7 +776,8 @@ wrt gbs _ mem lhs rhs = do
             --   return $ Just (rbs, mr, Tup' [])
             Tup' (Str' x:xs) -> do
               file <- openBinaryFile (T.unpack $ T.unwords $ argify r) WriteMode
-              args <- argIO xs
+              let args = argify (Tup' xs)
+              -- args <- argIO xs
               (_, _, _, ph) <- createProcess (proc (T.unpack x) (map T.unpack args)) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
@@ -784,7 +788,8 @@ wrt gbs _ mem lhs rhs = do
               return $ Just (rbs, mr, Tup' [])
             Tup' (Pth' x:xs) -> do
               file <- openBinaryFile (T.unpack $ T.unwords $ argify r) WriteMode
-              args <- argIO xs
+              let args = argify (Tup' xs)
+              -- args <- argIO xs
               (_, _, _, ph) <- createProcess (proc x (map T.unpack args)) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
@@ -824,7 +829,8 @@ apn gbs _ mem lhs rhs = do
             --   return $ Just (rbs, mr, Tup' [])
             Tup' (Str' x:xs) -> do
               file <- openBinaryFile (T.unpack $ T.unwords $ argify r) AppendMode
-              args <- argIO xs
+              let args = argify (Tup' xs)
+              -- args <- argIO xs
               (_, _, _, ph) <- createProcess (proc (T.unpack x) (map T.unpack args)) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
@@ -835,7 +841,8 @@ apn gbs _ mem lhs rhs = do
               return $ Just (rbs, mr, Tup' [])
             Tup' (Pth' x:xs) -> do
               file <- openBinaryFile (T.unpack $ T.unwords $ argify r) AppendMode
-              args <- argIO xs
+              let args = argify (Tup' xs)
+              -- args <- argIO xs
               (_, _, _, ph) <- createProcess (proc x (map T.unpack args)) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
