@@ -159,3 +159,6 @@ searchText needle haystack =
   if needle `T.isPrefixOf` haystack
   then 0 : map succ (searchText needle (T.drop 1 haystack))
   else map succ (searchText needle $ T.drop 1 haystack)
+
+tIndexMaybe :: T.Text -> Int -> Maybe Char
+txt `tIndexMaybe` i = T.uncons (T.drop i txt) >>= (return . fst)
