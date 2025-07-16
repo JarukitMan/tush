@@ -227,7 +227,7 @@ preprocess (Word "for":x@(Word _):Word "in":xs) =
             (Tuple y:back) -> Word "foreach":Tuple [x, Word ",", Tuple (preprocess y)]:preprocess back
             _ -> Word "for":x:Word "in":preprocess xs
         -- (_, []) -> Word "for":x:Word "in":preprocess xs
-        (front, back) -> Word "foreach":Tuple [x, Word ",", Tuple (preprocess front)]:preprocess back
+        (front, back) -> Word "foreach":Tuple [x, Tuple (preprocess front)]:preprocess back
 preprocess (Word "for":Tuple (x@(Word _):Word "in":ys):xs) = Word "foreach" :Tuple(x:Word ",":ys):xs
 preprocess (chunk:ts)
   |

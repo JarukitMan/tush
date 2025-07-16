@@ -465,15 +465,15 @@ next gbs etp mem lhs rhs = catch (do
       \_ -> return $ Tup' []
     check a =
         case a of
-          Str' x            -> execOr (T.unpack x)
+          Str' x            -> execOr (T.unpack x) []
           -- Tup' ((Str' x):_) -> execOr x
           -- Arr' Tstr (x:_)   -> execOr $ show x
           -- Str' _            -> cmdWait a
           Tup' ((Str' x):xs) -> exec (T.unpack x) xs
           -- Arr' Tstr (x:xs)       -> exec (show x) xs
           -- Because they aren't necessarily in PATH
-          Pth' x            -> exec x []
-          Tup' ((Pth' x):xs) -> exec x xs
+          Pth' x            -> execOr x []
+          Tup' ((Pth' x):xs) -> execOr x xs
           -- Arr' Tpth (x:xs)       -> exec (show x) xs
           Out' o _          -> do
             -- FIXME: Worst code I have ever written to date.
@@ -494,11 +494,11 @@ next gbs etp mem lhs rhs = catch (do
             return $ Tup' []
           _ -> return a
           where
-            execOr x = do
+            execOr x xs = do
               path <- findExecutable x
               case path of
                 Nothing -> return a
-                Just _ -> exec (show a) []
+                Just _ -> exec (show a) xs
                   -- aout <- cap a
                   -- case aout of Nothing -> return $ Tup' []
                   --   Just o  -> return $ Str' o
@@ -551,7 +551,7 @@ also gbs etp mem lhs rhs = catch (do
     -- didn't mean screwing up the user experience.
     check a =
         case a of
-          -- Str' x            -> execOr x
+          Str' _            -> cmd a >>= \_ -> return $ Tup' []
           -- Tup' ((Str' x):_) -> execOr x
           -- Arr' Tstr (x:_)   -> execOr $ show x
           -- Str' _            -> cmdConc a >>= \_ -> return $ Tup' []
@@ -612,6 +612,7 @@ pipe gbs _ mem lhs rhs = (do
               --     Just _ -> cap l
               Tup' (Pth' _:_) -> cmd l
               Pth' _          -> cmd l
+              Out' o h        -> return $ Just (o, h)
               _               -> return Nothing
               -- _               -> return $ Just $ show l
           let
@@ -696,6 +697,20 @@ here gbs _ mem lhs rhs = (do
               --     Just _ -> cap r
               Tup' (Pth' _:_) -> cap r
               Pth' _          -> cap r
+              Out' o h        -> do
+                output <- do
+                  -- hSetBuffering out NoBuffering
+                  hSetBinaryMode o True
+                  B.hGetContents o
+                -- copyHandleData out stdout
+                -- DEBUG
+                -- putStr output
+                exitCode <- waitForProcess h
+                if exitCode /= ExitSuccess
+                then T.putStrLn $ "Process " `T.append` T.show r `T.append` " exited with exit code: " `T.append` T.show exitCode
+                else return ()
+                -- Bash does this too. Might as well, since I don't want my args to contain newlines.
+                return $ Just (T.unwords $ T.words $ T.decodeUtf8With T.lenientDecode output)
               _               -> return Nothing
           let
             rout = fromMaybe "" ro
@@ -793,6 +808,11 @@ wrt gbs _ mem lhs rhs = do
               (_, _, _, ph) <- createProcess (proc x (map T.unpack args)) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
+            -- Out' o h -> do
+            --   file <- openBinaryFile (T.unpack $ T.unwords $ argify r) WriteMode
+            --   copyHandleData o file
+            --   _ <- waitForProcess h `catch` handler2
+              -- return $ Just (rbs, mr, Tup' [])
             _ -> do
               (T.appendFile (T.unpack $ T.unwords (argify r)) (T.show l)) `catch` handler
               return $ Just (rbs, mr, Tup' [])
@@ -846,6 +866,11 @@ apn gbs _ mem lhs rhs = do
               (_, _, _, ph) <- createProcess (proc x (map T.unpack args)) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
+            -- Out' o h -> do
+            --   file <- openBinaryFile (T.unpack $ T.unwords $ argify r) WriteMode
+            --   copyHandleData o file
+            --   _ <- waitForProcess h `catch` handler2
+            --   return $ Just (rbs, mr, Tup' [])
             _ -> do
               (appendFile (T.unpack $ T.unwords (argify r)) (show l)) `catch` handler
               return $ Just (rbs, mr, Tup' [])
@@ -1549,7 +1574,7 @@ fre gbs _ mem lhs rhs =
                     exists  <- doesDirectoryExist path
                     if exists
                     then do
-                      paths <- getDirectoryContents path
+                      paths <- listDirectory path
                       return (map (Pth') paths)
                     else return [Pth' path]
                   _          -> return [val]
@@ -1593,7 +1618,7 @@ fre gbs _ mem lhs rhs =
                 exists <- doesDirectoryExist path
                 if exists
                 then do
-                  paths <- getDirectoryContents path
+                  paths <- listDirectory path
                   return (map (Pth') paths)
                 else return [Pth' path]
               _          -> return [val]
