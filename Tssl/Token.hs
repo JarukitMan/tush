@@ -51,7 +51,7 @@ chunkify list@(x T.:< xs)
   x `T.elem` " \t" =
     chunkify xs
   |
-  x `T.elem` ",\r\n" = do
+  x `T.elem` ";,\r\n" = do
     (rest, unchunked) <- chunkify xs
     Right (Word ",":rest, unchunked)
   |
@@ -91,7 +91,7 @@ chunkify list@(x T.:< xs)
     else Left "Unclosed Left Array Delimiter \"[]\""
   |
   otherwise = do
-    let (front, back) = splitEscEx (`T.elem` " \t\r\n,{}()[]:|") list
+    let (front, back) = splitEscEx (`T.elem` " \t\r\n,{}()[]:;|") list
     case back of
       _ -> do
         (rest, unchunked) <- chunkify back
