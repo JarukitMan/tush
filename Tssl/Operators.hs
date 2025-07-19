@@ -75,11 +75,14 @@ add gbs etp mem lhs rhs = do
                 exists <- doesPathExist dir
                 if exists
                 then do
-                  fs <- listDirectory dir
-                  files <- sequence $ map canonicalizePath fs
-                  let fcycle = cycle files
-                  putStrLn $ show $ (dropWhile (/= a) fcycle) !! (fromInteger b)
-                  return $ Just (rbs, mr, Pth' $ (dropWhile (/= a) fcycle) !! (fromInteger b))
+                  cdir <- canonicalizePath dir
+                  fs <- listDirectory cdir
+                  let
+                    files = sequence $ map ((cdir ++) . ('/':)) fs
+                    fcycle = cycle files
+                  ca <- canonicalizePath a
+                  -- putStrLn $ show $ (dropWhile (/= ca) fcycle) !! (fromInteger b)
+                  return $ Just (rbs, mr, Pth' $ (dropWhile (/= ca) fcycle) !! (fromInteger b))
                 else do
                   putStrLn $ "Directory " ++ a ++ " does not exist."
                   return Nothing
@@ -165,10 +168,13 @@ sub gbs etp mem lhs rhs = do
                 if exists
                 then do
                   -- files <- listDirectory dir
-                  fs <- listDirectory dir
-                  files <- sequence $ map canonicalizePath fs
-                  let fcycle = cycle files
-                  return $ Just (rbs, mr, Pth' $ (dropWhile (/= a) fcycle) !! (fromInteger b))
+                  cdir <- canonicalizePath dir
+                  fs <- listDirectory cdir
+                  let
+                    files = map ((cdir ++) . ('/':)) fs
+                    fcycle = cycle files
+                  ca <- canonicalizePath a
+                  return $ Just (rbs, mr, Pth' $ (dropWhile (/= ca) fcycle) !! (fromInteger b))
                 else do
                   T.putStrLn $ "Directory " `T.append` (T.pack a) `T.append` " does not exist."
                   return Nothing
@@ -358,7 +364,21 @@ acs gbs etp mem lhs rhs = do
                 _                      -> Nothing
           in
             case dotv l r of
-              Nothing -> return Nothing
+              Nothing ->
+                case (l, r) of
+                  (Pth' dir, Int' i) -> do
+                    exists <- doesPathExist dir
+                    if exists
+                    then do
+                      cdir <- canonicalizePath dir
+                      fs <- listDirectory cdir
+                      let
+                        files = sequence $ map ((cdir ++) . ('/':)) fs
+                        fcycle = cycle files
+                      return $ Just (rbs, mr, Pth' $ fcycle !! (fromInteger i))
+                    else
+                      return Nothing
+                  _ -> return Nothing
               Just result -> return $
                 -- Assertion.
                 if val2typ result == etp || etp == Tany
@@ -967,10 +987,14 @@ range gbs _ mem lhs rhs = do
                   exists <- doesPathExist parentA
                   if exists
                   then do
-                    fs <- listDirectory ('/':parentA)
-                    files <- sequence $ map canonicalizePath fs
-                    let fcycle = cycle files
-                    return $ Just (rbs, mr, Arr' Tpth $ map (Pth') (takeWhile (/= b) (dropWhile (/= a) fcycle)))
+                    cdir <- canonicalizePath parentA
+                    fs <- listDirectory cdir
+                    let
+                      files = map ((cdir ++) . ('/':)) fs
+                      fcycle = cycle files
+                    ca <- canonicalizePath a
+                    cb <- canonicalizePath b
+                    return $ Just (rbs, mr, Arr' Tpth $ map (Pth') (takeWhile (/= cb) (dropWhile (/= ca) fcycle) ++ [cb]))
                   else do
                     T.putStrLn $ "Directory " `T.append` T.pack a `T.append` " does not exist."
                     return Nothing
@@ -1574,8 +1598,9 @@ fre gbs _ mem lhs rhs =
                     exists  <- doesDirectoryExist path
                     if exists
                     then do
-                      paths <- listDirectory path
-                      return (map (Pth') paths)
+                      cdir <- canonicalizePath path
+                      paths <- listDirectory cdir
+                      return (map (Pth' . (cdir ++) . ('/':)) paths)
                     else return [Pth' path]
                   _          -> return [val]
               let
@@ -1618,8 +1643,9 @@ fre gbs _ mem lhs rhs =
                 exists <- doesDirectoryExist path
                 if exists
                 then do
-                  paths <- listDirectory path
-                  return (map (Pth') paths)
+                  cdir <- canonicalizePath path
+                  paths <- listDirectory cdir
+                  return (map (Pth' . (cdir ++) . ('/':)) paths)
                 else return [Pth' path]
               _          -> return [val]
           let
