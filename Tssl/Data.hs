@@ -442,6 +442,13 @@ flatten (Expression p o l r) =
     ((Operand (Tup [])), _) -> Opr p o:flatten r
     _ -> flatten l ++ Opr p o:flatten r
 
+vFlatten :: Value -> [Value]
+vFlatten v =
+  case v of
+    Tup' vs -> concat $ map vFlatten vs
+    Arr' _ vs -> concat $ map vFlatten vs
+    _ -> [v]
+
 getMem :: Memory -> T.Text -> Maybe Data
 getMem (x:xs) key =
   case M.lookup key x of
@@ -642,11 +649,12 @@ argify val =
 -- -- Returns data in its stdout to the interpreter.
 cmd :: Value -> IO (Maybe (Handle, ProcessHandle))
 cmd val =
-  case val of
-    Out' o h              -> return $ Just (o, h)
-    Tup' (command:args) -> exec command (Tup' args)
-    Arr' _ (command:args) -> exec command (Tup' args)
-    Str' command          -> exec (Str' command) (Tup' [])
+  case vFlatten val of
+    [Out' o h]              -> return $ Just (o, h)
+    -- Tup' (command:args) -> exec command (Tup' args)
+    -- Arr' _ (command:args) -> exec command (Tup' args)
+    (Str' command:args)          -> exec (T.unpack command) (Tup' args)
+    (Pth' command:args)          -> exec command (Tup' args)
     -- Pth' command          -> exec (Pth' command) []
     _ -> putStrLn (show val) >>= \_ -> return Nothing
   where
@@ -655,11 +663,11 @@ cmd val =
       T.putStrLn ("cmd: " `T.append` T.show e) >>=
       \_ -> return Nothing
     exec command args = (exec' command args) `catch` handler
-    exec' command args =
-      case command of
-        Tup' (x:xs) -> cproc (show x) (map show xs ++ map T.unpack (argify args))
-        Arr' _ (x:xs) -> cproc (show x) (map show xs ++ map T.unpack (argify args))
-        _ -> cproc (show command) (map T.unpack (argify args))
+    exec' command args = cproc command (map T.unpack (argify args))
+      -- case command of
+      --   Tup' (x:xs) -> cproc (show x) (map show xs ++ map T.unpack (argify args))
+      --   Arr' _ (x:xs) -> cproc (show x) (map show xs ++ map T.unpack (argify args))
+      --   _ -> cproc (show command) (map T.unpack (argify args))
         -- Tup' _   -> do
         --   out <- cap command
         --   let args' = argify args

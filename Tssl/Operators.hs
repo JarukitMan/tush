@@ -484,18 +484,18 @@ next gbs etp mem lhs rhs = catch (do
       \(_, _, _, h) -> waitForProcess h >>=
       \_ -> return $ Tup' []
     check a =
-        case a of
-          Str' x            -> execOr (T.unpack x) []
+        case vFlatten a of
+          [Str' x]            -> execOr (T.unpack x) []
           -- Tup' ((Str' x):_) -> execOr x
           -- Arr' Tstr (x:_)   -> execOr $ show x
           -- Str' _            -> cmdWait a
-          Tup' ((Str' x):xs) -> exec (T.unpack x) xs
+          ((Str' x):xs) -> exec (T.unpack x) xs
           -- Arr' Tstr (x:xs)       -> exec (show x) xs
           -- Because they aren't necessarily in PATH
-          Pth' x            -> execOr x []
-          Tup' ((Pth' x):xs) -> execOr x xs
+          [Pth' x]            -> execOr x []
+          ((Pth' x):xs) -> execOr x xs
           -- Arr' Tpth (x:xs)       -> exec (show x) xs
-          Out' o _          -> do
+          [Out' o _]          -> do
             -- FIXME: Worst code I have ever written to date.
             (_, _, _, process) <- createProcess (proc "cat" []) {std_in = UseHandle o}
             exitCode <- waitForProcess process
@@ -570,16 +570,19 @@ also gbs etp mem lhs rhs = catch (do
     -- It would've been done without a thought if capturing the output
     -- didn't mean screwing up the user experience.
     check a =
-        case a of
-          Str' _            -> cmd a >>= \_ -> return $ Tup' []
+        case vFlatten a of
+          (Str' _:_) -> cmd a >>= \_ -> return $ Tup' []
+          (Pth' _:_) -> cmd a >>= \_ -> return $ Tup' []
+          (Out' _ _:_) -> return $ Tup' []
+          -- Str' _            -> cmd a >>= \_ -> return $ Tup' []
           -- Tup' ((Str' x):_) -> execOr x
           -- Arr' Tstr (x:_)   -> execOr $ show x
           -- Str' _            -> cmdConc a >>= \_ -> return $ Tup' []
-          Tup' ((Str' _):_) -> cmd a >>= \_ -> return $ Tup' []
+          -- Tup' ((Str' _):_) -> cmd a >>= \_ -> return $ Tup' []
           -- Arr' Tstr _       -> cmd a >>= \_ -> return $ Tup' []
           -- Because they aren't necessarily in PATH
-          Pth' _            -> cmd a >>= \_ -> return $ Tup' []
-          Tup' ((Pth' _):_) -> cmd a >>= \_ -> return $ Tup' []
+          -- Pth' _            -> cmd a >>= \_ -> return $ Tup' []
+          -- Tup' ((Pth' _):_) -> cmd a >>= \_ -> return $ Tup' []
           -- Arr' Tpth _       -> cmd a >>= \_ -> return $ Tup' []
           _ -> return a
           -- where
@@ -615,24 +618,26 @@ pipe gbs _ mem lhs rhs = (do
         Nothing -> return Nothing
         Just (rbs, mr, r) -> do
           lo <-
-            case l of
+            case vFlatten l of
+              (Str' _:_)          -> cmd l
+              (Pth' _:_)          -> cmd l
               -- Tup' (Str' x:_) -> do
                 -- x' <- findExecutable x
                 -- case x' of
                 --   Nothing -> return $ Just $ show l
                 --   Just _ -> cap l
-              Tup' (Str' _:_) -> cmd l
+              -- Tup' (Str' _:_) -> cmd l
               -- Not sure about this.
-              Str' _          -> cmd l
+              -- Str' _          -> cmd l
               -- Str' _          -> cap l
               -- Str' x          -> do
               --   x' <- findExecutable x
               --   case x' of
               --     Nothing -> return $ Just $ show l
               --     Just _ -> cap l
-              Tup' (Pth' _:_) -> cmd l
-              Pth' _          -> cmd l
-              Out' o h        -> return $ Just (o, h)
+              -- Tup' (Pth' _:_) -> cmd l
+              -- Pth' _          -> cmd l
+              [Out' o h]        -> return $ Just (o, h)
               _               -> return Nothing
               -- _               -> return $ Just $ show l
           let
@@ -673,9 +678,11 @@ pipe gbs _ mem lhs rhs = (do
                   --     T.putStrLn $ "Could not create process " `T.append` x `T.append` (T.unwords rarg) `T.append` " properly."
                   --     return Nothing
           -- let lout = show l
-          case r of
-            Tup' (Str' x:xs) -> exec (T.unpack x) xs
-            Tup' (Pth' x:xs) -> exec x xs
+          case vFlatten r of
+            (Str' x:xs) -> exec (T.unpack x) xs
+            (Pth' x:xs) -> exec x xs
+            -- Sketchy.
+            [Out' _ _ ] -> return $ Just (rbs, mr, r)
             _ -> exec (show r) []) `catch` handler
   where
     handler :: IOError -> IO (Maybe a)
@@ -700,24 +707,26 @@ here gbs _ mem lhs rhs = (do
         Nothing -> return Nothing
         Just (lbs, ml, l) -> do
           ro <-
-            case r of
+            case vFlatten r of
               -- Tup' (Str' x:_) -> do
                 -- x' <- findExecutabre x
                 -- case x' of
                 --   Nothing -> return $ Just $ show r
                 --   Just _ -> cap r
-              Tup' (Str' _:_) -> cap r
+              -- Tup' (Str' _:_) -> cap r
               -- Not sure about this.
-              Str' x -> return $ Just x
+              [Str' x] -> return $ Just x
+              (Str' _:_) -> cap r
+              (Pth' _:_) -> cap r
               -- Str' _          -> cap r
               -- Str' x          -> do
               --   x' <- findExecutabre x
               --   case x' of
               --     Nothing -> return $ Just $ show r
               --     Just _ -> cap r
-              Tup' (Pth' _:_) -> cap r
-              Pth' _          -> cap r
-              Out' o h        -> do
+              -- Tup' (Pth' _:_) -> cap r
+              -- Pth' _          -> cap r
+              [Out' o h]        -> do
                 output <- do
                   -- hSetBuffering out NoBuffering
                   hSetBinaryMode o True
@@ -759,9 +768,11 @@ here gbs _ mem lhs rhs = (do
                       T.putStrLn $ "Could not create process " `T.append` x `T.append` (T.unwords larg) `T.append` " properly."
                       return Nothing
           -- let lout = show l
-          case l of
-            Tup' (Str' x:xs) -> exec x xs
-            Tup' (Pth' x:xs) -> exec (T.pack x) xs
+          case vFlatten l of
+            (Str' x:xs) -> exec x xs
+            (Pth' x:xs) -> exec (T.pack x) xs
+            -- Tup' (Str' x:xs) -> exec x xs
+            -- Tup' (Pth' x:xs) -> exec (T.pack x) xs
             _ -> exec (T.show l) []) `catch` handler
   where
     handler :: IOError -> IO (Maybe a)
@@ -804,24 +815,24 @@ wrt gbs _ mem lhs rhs = do
       case right of
         Nothing -> return Nothing
         Just (rbs, mr, r) ->
-          case l of
+          case vFlatten l of
             -- Str' x -> do
             --   (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
             --   _ <- waitForProcess ph `catch` handler2
             --   return $ Just (rbs, mr, Tup' [])
-            Tup' (Str' x:xs) -> do
+            (Str' x:xs) -> do
               file <- openBinaryFile (T.unpack $ T.unwords $ argify r) WriteMode
               let args = argify (Tup' xs)
               -- args <- argIO xs
               (_, _, _, ph) <- createProcess (proc (T.unpack x) (map T.unpack args)) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
-            Pth' x -> do
-              file <- openBinaryFile (T.unpack $ T.unwords $ argify r) WriteMode
-              (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
-              _ <- waitForProcess ph `catch` handler2
-              return $ Just (rbs, mr, Tup' [])
-            Tup' (Pth' x:xs) -> do
+            -- Pth' x -> do
+            --   file <- openBinaryFile (T.unpack $ T.unwords $ argify r) WriteMode
+            --   (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
+            --   _ <- waitForProcess ph `catch` handler2
+            --   return $ Just (rbs, mr, Tup' [])
+            (Pth' x:xs) -> do
               file <- openBinaryFile (T.unpack $ T.unwords $ argify r) WriteMode
               let args = argify (Tup' xs)
               -- args <- argIO xs
@@ -862,24 +873,24 @@ apn gbs _ mem lhs rhs = do
       case right of
         Nothing -> return Nothing
         Just (rbs, mr, r) ->
-          case l of
+          case vFlatten l of
             -- Str' x -> do
             --   (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
             --   _ <- waitForProcess ph `catch` handler2
             --   return $ Just (rbs, mr, Tup' [])
-            Tup' (Str' x:xs) -> do
+            (Str' x:xs) -> do
               file <- openBinaryFile (T.unpack $ T.unwords $ argify r) AppendMode
               let args = argify (Tup' xs)
               -- args <- argIO xs
               (_, _, _, ph) <- createProcess (proc (T.unpack x) (map T.unpack args)) {std_out = UseHandle file}
               _ <- waitForProcess ph `catch` handler2
               return $ Just (rbs, mr, Tup' [])
-            Pth' x -> do
-              file <- openBinaryFile (T.unpack $ T.unwords $ argify r) AppendMode
-              (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
-              _ <- waitForProcess ph `catch` handler2
-              return $ Just (rbs, mr, Tup' [])
-            Tup' (Pth' x:xs) -> do
+            -- Pth' x -> do
+            --   file <- openBinaryFile (T.unpack $ T.unwords $ argify r) AppendMode
+            --   (_, _, _, ph) <- createProcess (proc x []) {std_out = UseHandle file}
+            --   _ <- waitForProcess ph `catch` handler2
+            --   return $ Just (rbs, mr, Tup' [])
+            (Pth' x:xs) -> do
               file <- openBinaryFile (T.unpack $ T.unwords $ argify r) AppendMode
               let args = argify (Tup' xs)
               -- args <- argIO xs
