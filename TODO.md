@@ -1,10 +1,10 @@
 # FIX:
 - Find a way to deal with "," and tuple appending/dropping type signatures.
        ^ Might have to dabble into Template Haskell. (decision inspired by [https://hackage.haskell.org/package/tuple-append])
+- Fix all the inconsistencies.
+- Unimplement Ord, move it to the operators.
 
 # TODO:
-- Implement internalMatch for Grr.Regex.
-- Implement Grr.
 - Implement Imp.
 - Implement Tsf.
 - Add globbing/regex to input. Will probably be built into Tsf...

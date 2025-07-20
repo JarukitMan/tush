@@ -25,6 +25,10 @@ executable tush
                       Tssl.Evaluate,
                       Tssl.Data,
                       Tssl.Operators,
+                      Grr.Glob,
+                      Grr.NamedRanges,
+                      Grr.Regex,
+                      Grr,
     -- other-extensions:
     build-depends:    base ^>=4.21.0.0,
                       vty-crossplatform,
@@ -33,6 +37,8 @@ executable tush
                       process,
                       text,
                       bytestring,
+                      ghc,
+                      array,
     hs-source-dirs:   .
     default-language: GHC2024
-    default-extensions: OverloadedStrings
+    -- default-extensions: OverloadedStrings
