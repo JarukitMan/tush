@@ -78,11 +78,11 @@ add gbs etp mem lhs rhs = do
                   cdir <- canonicalizePath dir
                   fs <- listDirectory cdir
                   let
-                    files = sequence $ map ((cdir ++) . ('/':)) fs
+                    files = map ((cdir ++) . ('/':)) fs
                     fcycle = cycle files
                   ca <- canonicalizePath a
                   -- putStrLn $ show $ (dropWhile (/= ca) fcycle) !! (fromInteger b)
-                  return $ Just (rbs, mr, Pth' $ (dropWhile (/= ca) fcycle) !! (fromInteger b))
+                  return $ maybe Nothing (\x -> Just (rbs, mr, Pth' $ x)) $ (dropWhile (/= ca) fcycle) !? (fromInteger b)
                 else do
                   putStrLn $ "Directory " ++ a ++ " does not exist."
                   return Nothing
@@ -174,7 +174,8 @@ sub gbs etp mem lhs rhs = do
                     files = map ((cdir ++) . ('/':)) fs
                     fcycle = cycle files
                   ca <- canonicalizePath a
-                  return $ Just (rbs, mr, Pth' $ (dropWhile (/= ca) fcycle) !! (fromInteger b))
+                  return $ maybe Nothing (\x -> Just (rbs, mr, Pth' $ x)) $ (dropWhile (/= ca) fcycle) !? (fromInteger b)
+                  -- return $ Just (rbs, mr, Pth' $ (dropWhile (/= ca) fcycle) !! (fromInteger b))
                 else do
                   T.putStrLn $ "Directory " `T.append` (T.pack a) `T.append` " does not exist."
                   return Nothing
@@ -373,9 +374,10 @@ acs gbs etp mem lhs rhs = do
                       cdir <- canonicalizePath dir
                       fs <- listDirectory cdir
                       let
-                        files = sequence $ map ((cdir ++) . ('/':)) fs
+                        files = map ((cdir ++) . ('/':)) fs
                         fcycle = cycle files
-                      return $ Just (rbs, mr, Pth' $ fcycle !! (fromInteger i))
+                      return $ maybe Nothing (\x -> Just (rbs, mr, Pth' $ x)) $ fcycle !? (fromInteger i)
+                      -- return $ Just (rbs, mr, Pth' $ fcycle !! (fromInteger i))
                     else
                       return Nothing
                   _ -> return Nothing
@@ -417,10 +419,10 @@ cd gbs _ mem lhs rhs = do
           else
             (T.putStrLn $ "cd: Directory " `T.append` (T.pack path) `T.append` " doesn't exist.") >>=
             \_ -> return $ Nothing
-        Nothing ->
-          getHomeDirectory >>=
-          setCurrentDirectory >>=
-          \_ -> return $ Just (lbs, mem, l)
+        Nothing -> return Nothing
+          -- getHomeDirectory >>=
+          -- setCurrentDirectory >>=
+          -- \_ -> return $ Just (lbs, mem, l)
 
 -- setenv :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
 -- gbs setenv mem _ rhs = do

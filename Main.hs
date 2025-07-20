@@ -509,7 +509,7 @@ initmem =
             insertOp (Tany, Tint) (Base acs Tany) $
             insertOp (Tstr, Tint) (Base acs Tchr) $
             insertOp (Tstr, Tarr Tint) (Base acs Tstr) $
-            insertOp (Tpth, Tstr) (Base acs Tpth)
+            insertOp (Tpth, Tint) (Base acs Tpth)
             (empty, Nothing)
           )
         ),
