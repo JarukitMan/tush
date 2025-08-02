@@ -48,8 +48,8 @@ The frontend part of the Turtle Shell. This is the part that will be using `vty`
 # keybinds
 * normal
   * motion
-    | motion                | key | <!-- This mode actually returns to the "previous mode" (most cases, --!>
-    |-----------------------|-----| <!-- the wrapper function) once the action is done, it's just called again immediately. --!>
+    | motion                | key |
+    |-----------------------|-----|
     | left                  |  h  |
     | right                 |  j  |
     | up                    |  k  |
@@ -97,45 +97,46 @@ The frontend part of the Turtle Shell. This is the part that will be using `vty`
     | down half page | C-d |
     | up half page   | C-u |
   * switch
-    | mode               | key | <!-- Window, Mark mode unimplemented. --!>
-    |--------------------|-----| <!-- Repeat mode doesn't need keybinds --!>
-    | insert             |  i  |
-    | insert to line     |  I  |
-    | append             |  a  |
-    | append to line     |  A  |
-    | new line under     |  o  | <!-- Internally, these modes that are "do action and go into another mode" modes aren't really modes. --!>
-    | new line above     |  O  | <!-- This one is just "add line above and go to insert mode". --!>
-    | visual             |  v  |
-    | visual line        |  V  |
-    | visual block       | C-v |
-    | search             |  /  |
-    | jump to next       |  f  |
-    | jump to previous   |  F  |
-    | jump forward until |  t  |
-    | jump back to after |  T  |
-    | goto               |  g  |
-    | fold               |  z  |
-    | cursor             |  Z  | <!-- This is different from Vim, but come on, they're different actions. --!>
-    | replace            |  r  | <!-- These two modes use --!>
-    | overwrite          |  R  | <!-- insert mode keybinds --!>
-    | change             |  c  |
-    | change line        | C S |
-    | substitute         |  s  |
-    | copy               |  y  | <!-- These five modes use the normal mode navigation keybinds. --!>
-    | delete             |  d  | <!-- But with the extra bind of repeating themselves to do line. --!>
-    | indent             |  >  | <!-- --!>
-    | de-indent          |  <  | <!-- --!>
-    | re-indent          |  =  | <!-- --!>
-    | repeat 1           |  1  | <!-- I know it looks stupid. It IS stupid. --!>
-    | repeat 2           |  2  | <!-- This basically sends it to the same repeat mode with that number already in the buffer. --!>
-    | repeat 3           |  3  | <!-- What else do I do, make it a new key altogether? I took enough liberties with the cursor. --!>
-    | repeat 4           |  4  |
-    | repeat 5           |  5  |
-    | repeat 6           |  6  |
-    | repeat 7           |  7  |
-    | repeat 8           |  8  |
-    | repeat 9           |  9  |
-    | repeat             |     | <!-- The user can define a no-num repeat key, though. Wink. --!>
+    | mode               | key    | <!-- Window, Mark mode unimplemented. --!>
+    |--------------------|--------| <!-- Repeat mode doesn't need keybinds --!>
+    | return             | return | <!-- This is sending to the outside-most function. Yet another signal. --!>
+    | insert             |  i     |
+    | insert to line     |  I     |
+    | append             |  a     |
+    | append to line     |  A     |
+    | new line under     |  o     | <!-- Internally, these modes that are "do action and go into another mode" modes aren't really modes. --!>
+    | new line above     |  O     | <!-- This one is just "add line above and go to insert mode". --!>
+    | visual             |  v     |
+    | visual line        |  V     |
+    | visual block       | C-v    |
+    | search             |  /     |
+    | jump to next       |  f     |
+    | jump to previous   |  F     |
+    | jump forward until |  t     |
+    | jump back to after |  T     |
+    | goto               |  g     |
+    | fold               |  z     |
+    | cursor             |  Z     | <!-- This is different from Vim, but come on, they're different actions. --!>
+    | replace            |  r     | <!-- These two modes use --!>
+    | overwrite          |  R     | <!-- insert mode keybinds --!>
+    | change             |  c     |
+    | change line        | C S    |
+    | substitute         |  s     |
+    | copy               |  y     | <!-- These five modes use the normal mode navigation keybinds. --!>
+    | delete             |  d     | <!-- But with the extra bind of repeating themselves to do line. --!>
+    | indent             |  >     | <!-- --!>
+    | de-indent          |  <     | <!-- --!>
+    | re-indent          |  =     | <!-- --!>
+    | repeat 1           |  1     | <!-- I know it looks stupid. It IS stupid. --!>
+    | repeat 2           |  2     | <!-- This basically sends it to the same repeat mode with that number already in the buffer. --!>
+    | repeat 3           |  3     | <!-- What else do I do, make it a new key altogether? I took enough liberties with the cursor. --!>
+    | repeat 4           |  4     |
+    | repeat 5           |  5     |
+    | repeat 6           |  6     |
+    | repeat 7           |  7     |
+    | repeat 8           |  8     |
+    | repeat 9           |  9     |
+    | repeat             |        | <!-- The user can define a no-num repeat key, though. Wink. --!>
 * insert
   * motion
     | motion                  | key | <!-- Yeah this is all I'm doing for emacs since I don't use it. --!>
@@ -163,15 +164,15 @@ The frontend part of the Turtle Shell. This is the part that will be using `vty`
     | lowercase word            | M-l      |
     | capitalize word           | M-c      |
     | new line                  | S-return |
-    | execute                   | return   |
     | accept history suggestion | C-l      |
   * view
   * switch
-    | mode       | key |
-    |------------|-----|
-    | normal     | ESC |
-    | search     | C-s |
-    | suggestion | tab |
+    | mode       | key    |
+    |------------|--------|
+    | normal     | ESC    |
+    | return     | return |
+    | search     | C-s    |
+    | suggestion | tab    |
 * suggestion
   * motion
     | motion              | key   |

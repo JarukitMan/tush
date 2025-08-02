@@ -5,6 +5,7 @@
 - Unimplement Ord, move it to the operators.
 
 # TODO:
+
 - Implement Imp.
 - Implement Tsf.
 - Add globbing/regex to input. Will probably be built into Tsf...
@@ -13,6 +14,16 @@
 - Write a proper README and split the current one to Tssl and Tsf.
 - Write examples.
 - Store handles for the processes that are in the background.
+
+!! At this point I'll never get to Tsf so I'm skipping to it and I'm going to "fix" the language part later. !!
+- Modified Out' -> Pcs'. Now I need to:
+    * Convert `pipe` to link the input and the output of the two processes together and return a Pcs.
+    * Store stopped jobs (created by the '&' operator) in the new `State` type.
+    * Make an operator to resume stopped jobs.
+    * Make the interpreter use `State` instead of `Memory`.
+- Added the Pat token. Now I need to:
+    * Match to see if it's a Pat or a Pth.
+    * Resolve Pats in the interpret function.
 
 # FUTURE:
 ## Front part:

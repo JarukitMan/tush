@@ -29,9 +29,12 @@ executable tush
                       Grr.NamedRanges,
                       Grr.Regex,
                       Grr,
+                      Tsf,
+                      Imp,
     -- other-extensions:
     build-depends:    base ^>=4.21.0.0,
                       vty-crossplatform,
+                      vty,
                       containers,
                       directory,
                       process,
