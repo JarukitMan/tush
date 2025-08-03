@@ -57,8 +57,8 @@ add gbs etp mem lhs rhs = do
                 (Pth' a, Str' b)       -> Pth' $ a ++ ('/':T.unpack b)
                 (Str' a, Chr' b)       -> Str' $ a `T.snoc` b
                 (Chr' a, Str' b)       -> Str' $ a `T.cons` b
-                (Str' a, b)            -> Str' $ a `T.append` T.show b
-                (a, Str' b)            -> Str' $ (T.show a) `T.append` b
+                -- (Str' a, b)            -> Str' $ a `T.append` T.show b
+                -- (a, Str' b)            -> Str' $ (T.show a) `T.append` b
                 (Arr' t1 a, Arr' t2 b) ->
                   if t1 == t2
                   then Arr' t1 (a ++ b)

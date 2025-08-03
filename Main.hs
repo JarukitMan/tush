@@ -370,8 +370,8 @@ initmem =
             insertOp (Tchr, Tchr) (Base add (Tchr)) $
             insertOp (Tbln, Tbln) (Base add (Tbln)) $
             insertOp (Tpth, Tstr) (Base add (Tpth)) $
-            insertOp (Tstr, Tany) (Base add (Tstr)) $
-            insertOp (Tany, Tstr) (Base add (Tstr)) $
+            -- insertOp (Tstr, Tany) (Base add (Tstr)) $
+            -- insertOp (Tany, Tstr) (Base add (Tstr)) $
             -- insertOp (Tarr Tany, Tarr Tany) (Base add (Tarr Tany)) $
             -- insertOp (Tarr Tany, Tany) (Base add (Tarr Tany)) $
             insertOp (Tpth, Tint) (Base add (Tpth)) $

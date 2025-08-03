@@ -6,83 +6,15 @@
   `--'   `----' `----' `--' `--'
 ```
 
-# !!! Literally Unusable Right Now. Actually Still in Its Conception Stage !!!
 # Turtle Shell (tush)
 
-Simple shell with python-style string formatting and ability to do simple maths.
-Shipped alongside the Erminal, (hopefully).
+Simple shell with python-style string formatting and ability to do simple processing.
 ___
 
-## Dependencies
-- [cabal] (https://www.haskell.org/cabal/) (Cause I don't know how to use vty without it... If you can do that, you can just GHC this software.)
-- [vty] (https://github.com/jtdaugherty/vty) (I'm not reimplementing curses.)
-
-## Abnormalities:
-
-1. (...) instead of $(...) - No idea why shells went with that approach,\
-    it's a real bother to write in the shell.
-2. f".{...}.." for formatted strings - Just like in python.\
-    Strings in normal bash is very, very annoying.
-3. Vim-style text navigation - Personal preferences.
-4. Thick shell. Similar to vim's "q:" screen. The shell clears the stdin part of the screen and\
-    lets processes "take over" (WIP: while keeping track of the stdin and stdout to put in the buffer later.)\
-    It then rewrites the stdin area buffer.
-___
-
-## Features, period.
-
-1. Calling other programs.
-2. Navigation.
-3. Input line highlighting.
-4. Piping, in all kinds of ways. ( -> , | => (<<< replaced by <- because here files are wack just redirect the cat'd here string) (...))
-5. Simple regex. (? * [...] ...)
-6. History.
-7. Tab-completion.
-8. exec/source
-9. Non-interactive/Interactive session.
-10. Command session. (-c)
-11. Flag/Variable parsing.
-12. Branching/Looping, basic logic.
-13. Environment/Arguments.
-14. Error messages.
-15. Some fancy shit like rendering color ANSI codes or markdown in real time.
-16. Blesh style auto-complete and config.
-17. Config live-reloading.
-18. Be modular and maintainable/extensible.
-19. Variables and aliases.
-20. Time.
-21. Whatever bash has (that I like) and more (and easier!).
-22. Sync & Async
-23. Customizable prompt.
-24. Flushing ANSI characters at output end.
-25. Fuzzy Search.
-26. Login.
-27. Variable Type Inference. (command, flag, number, string, etc.)
-28. Foreground/Background Processes.
-___
-
-## What can be configured? (tush.ini or md? We'll see.)
-
-1. Styles.
-    1. Indicator. (Default = "<[path]> ")
-    2. Path style. (Default = 1. 0 for none, -1 for full, positive number for that many directories deep.)
-    3. Styles for certain file types (executable, link, etc.)
-    4. Auto-complete style. (Underline, color, whatever. Just like the above.)
-    5. Auto-complete size. (Default = -1. negative to show all, 0 to show none, the rest to show that many lines.)
-    6. Input height. (Default = 5. Anything less than 1 is ignored.)
-    7. Scroll zone offset. (Default = 1. Negative means center at all times.)
-2. Features.
-    1. History-based auto-suggestions.
-    2. Split input & Output. (Default = true)
-    3. Sorting order.
-3. Special keybinds. (command = key)
-4. Init script. Both on login and not. (profile and rc) (login means the first shell)
-5. Variables.
-    1. Just variables.
-    2. Cache path.
-    3. Exec path.
-    4. Config path.
-    5. History path.
+# !! ON HIATUS !!
+I need to rewrite the entire specification later.
+the current implementation is a mess,
+and the front-end is not yet implemented.
 ___
 
 ## Turtle Shell Scripting Language 1.0 Specifications.
@@ -98,7 +30,7 @@ Four token types: Literals, Variables, Operators, Closures.
 * tup - The tuple type, a collection of values of any types.\
     One-long tuples are automatically unpacked.\
     `(([a b c] d 'e') (a "bc") ('d' 5))`
-    `(1, 2 + 3) == ((1) (2 + 3)) == (1, 5) == (1 5)`
+    `(1, 2 + 3) == ((1), (2 + 3)) == (1, 5) == (1 5)`
 * arr - The array type, a collection of values from a single type. (They're actually lists in this implementation.) `[a1 a2 a3] [a4 a5] [b1 b2] ...`
 * typ - The type type, an enumeration of all types. `int flt bln ...`
 * str - Normal Strings, defined either with or without quotes. `This sentence has "four strings"`
