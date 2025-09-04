@@ -1,10 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Tssl.Token(tokenize) where
 import Misc
--- import qualified Data.Map as M 
 import Tssl.Data
 import qualified Data.Text as T
--- import Data.Word
 
 tokenize :: Memory -> T.Text -> Either T.Text [Token]
 tokenize memory x = case (chunkify) x of
@@ -16,7 +14,6 @@ tokenize memory x = case (chunkify) x of
 
 data Chunk =
   Word T.Text | Character Char | String T.Text | FString [Chunk] | Tuple [Chunk] | Array [Chunk]
-  -- Period | Pipe | Endline
   deriving (Show, Eq)
 
 -- Catch chars
@@ -38,11 +35,6 @@ chunkify ('f' T.:< '"'T.:< xs) = do
 chunkify ('.'T.:< '.' T.:< xs) = do
     (rest, unchunked) <- chunkify xs
     Right (Word "..":rest, unchunked)
--- This one is unneeded.
--- chunkify ('.' T.:< '/' T.:< xs) = do
---     let (front, xs') = splitEsc (== ' ') xs
---     (rest, unchunked) <- chunkify xs'
---     Right (Word ('.' `T.cons` '/' `T.cons` front):rest, unchunked)
 
 chunkify T.Empty = Right ([], T.empty)
 
@@ -56,7 +48,6 @@ chunkify list@(x T.:< xs)
     Right (Word ",":rest, unchunked)
   |
   x `T.elem` ":|" = do
-  -- x `elem` ":|" = do
     (rest, unchunked) <- chunkify xs
     Right (Word (T.singleton x):rest, unchunked)
   |
@@ -96,11 +87,6 @@ chunkify list@(x T.:< xs)
       _ -> do
         (rest, unchunked) <- chunkify back
         Right (Word front:rest, unchunked)
-    -- -- I'll just check for floats here screw it.
-    -- case rest of
-    --   (Word ".":Word next:rest') -> Right $ (Word (front `T.append` ('.' `T.cons` next)):rest', unchunked)
-    --   _ -> Right $ (Word front:rest, unchunked)
-    -- Right (Word front:rest, unchunked)
   where
     splitEscEx :: (Char -> Bool) -> T.Text -> (T.Text, T.Text)
     -- Just copied from misc with an extra condition of ".."
@@ -117,7 +103,6 @@ chunkify list@(x T.:< xs)
 
 
 fmtChunk :: T.Text -> Either T.Text ([Chunk], T.Text)
--- fmtChunk [] = Left "Unclosed Formatted String"
 fmtChunk list
   |
   T.null list = Left "Unclosed Formatted String"
@@ -143,9 +128,6 @@ fmtChunk list
 checkWord :: Memory -> Chunk -> Token
 checkWord memory x =
   case x of
-    -- Period        -> Dot
-    -- Pipe          -> Bar
-    -- Endline       -> End
     String    str -> Str str
     Character chr -> Chr chr
     Tuple     tup -> Tup $ map (checkWord memory) tup
@@ -191,30 +173,6 @@ pmtMaybe x =
     "Any" -> Just Tany
     _     -> Nothing
 
--- preprocess :: String -> String
--- preprocess ('c':'o':'n':'t':'i':'n':'u':'e':' ':xs) = "return () " ++ xs
--- preprocess ('o':'p':'r':' ':xs) = "opr" ++ ('(':front) ++ (')':back)
---   where (front, back) = splitWith (== '=') xs
--- preprocess ('i':'f':' ':xs) =
---   if not $ null $ filter (\x -> not $ x `elem` " \t\r\n") front
---   then "if" ++ ('(':front) ++ (')':back)
---   else "if " ++ preprocess xs
---   where (front, back) = splitWith (`elem` "({") xs
--- preprocess ('f':'o':'r':' ':xs) =
---   case words front of
---     (x:"in":xs') -> "foreach" ++ ('(':x) ++ (',':' ':unwords xs') ++ (')':back)
---     _ ->
---       if not $ null $ filter (\x -> not $ x `elem` " \t\r\n") front
---       then "for" ++ ('(':front) ++ (')':back)
---       else "for " ++ preprocess xs
---   where (front, back) = splitWith (`elem` "({") xs
--- preprocess ('w':'h':'i':'l':'e':' ':xs) =
---   if not $ null $ filter (\x -> not $ x `elem` " \t\r\n") front
---   then "while" ++ ('(':front) ++ (')':back)
---   else "while " ++ preprocess xs
---   where (front, back) = splitWith (`elem` "({") xs
--- preprocess [] = []
--- preprocess (x:xs) = x:(preprocess xs)
 preprocess :: [Chunk] -> [Chunk]
 preprocess [] = []
 preprocess (Tuple tup:xs) = Tuple (preprocess tup):preprocess xs
@@ -226,7 +184,6 @@ preprocess (Word "for":x@(Word _):Word "in":xs) =
           case rest of
             (Tuple y:back) -> Word "foreach":Tuple [x, Word ",", Tuple (preprocess y)]:preprocess back
             _ -> Word "for":x:Word "in":preprocess xs
-        -- (_, []) -> Word "for":x:Word "in":preprocess xs
         (front, back) -> Word "foreach":Tuple [x, Tuple (preprocess front)]:preprocess back
 preprocess (Word "for":Tuple (x@(Word _):Word "in":ys):xs) = Word "foreach" :Tuple(x:Word ",":ys):xs
 preprocess (chunk:ts)

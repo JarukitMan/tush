@@ -1,0 +1,58 @@
+## Looks
+
+- Texts
+  - Normal Mode Text : "NORMAL"
+  - Insert Mode Text : "INSERT"
+  - Select Mode Text : "SELECT"
+  - Search Mode Text : "SEARCH"
+  - Jump to Next Mode Text : "JUMPTO"
+  - Jump to Previous Mode Text : "JUMPTO"
+  - Jump Until Next Mode Text : "JUMPTIL"
+  - Jump Until Previous Mode Text : "JUMPTIL"
+  - Goto Mode Text : "GOTO"
+  - Fold Mode Text : "FOLD"
+  - Replace Mode Text : "REPLACE"
+  - Overwrite Mode Text : "OVERWRITE"
+  - Repeat Mode Text : "REPEAT"
+  - Suggestion Mode Text : "SUGGEST"
+  - Fold Definition Mode Text : "FOLDDEF"
+  - Prompt : "(<host color="blue"/>) -> (<user color="blue"/>) -> <|<dir color="green" depth=1/>|<p color="yellow">*<p/>> -> "
+  - Seperator : "<p color="white">\[(<b><mode depth=0/></b>)] | \[(<dir>)]</p>"
+- Colors
+  - Language
+    - Integer : black
+    - Double : black
+    - Character : blue
+    - String : orange
+    - Boolean : cyan
+    - Path : green
+    - Type : red
+    - Word : black
+    - Tuple : blue
+    - Array : purple
+    - Comment : gray
+  - Window
+    - Background : none
+    - Dim : none
+    - Seperator : black
+    - Normal Cursor : none
+    - Insert Cursor : cyan
+    - Select Cursor : red
+    - Selection : grey
+    - Selected Text : none
+    - Text Under Cursor : white
+- Sizes
+  - Window : 5
+  - Seperator : 1
+  - Completion : 2
+  - Vertical Margin : 1
+  - Horizontal Margin : 1
+
+## Feels
+
+- Features
+  - Completion : top
+  - Expansion : glob
+  - History : true
+  - Dim : decolor
+- Keybinds

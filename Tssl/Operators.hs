@@ -12,20 +12,15 @@ import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import qualified Data.ByteString as B
--- import Data.Word(Word8)
 import qualified Data.Map as M
 import qualified Data.Char as C
 import System.Directory
--- import System.Directory.Internal
--- import System.IO.Error
 import System.Process
 import System.IO
 import System.Exit
 import System.Environment
 import Control.Exception
 import GHC.Float
--- import GHC.IO.Handle
--- import Text.Read
 
 add :: Bool -> Type -> Memory -> Expression -> Expression -> IO (Maybe (Bool, Memory, Value))
 add gbs etp mem lhs rhs = do
@@ -57,8 +52,6 @@ add gbs etp mem lhs rhs = do
                 (Pth' a, Str' b)       -> Pth' $ a ++ ('/':T.unpack b)
                 (Str' a, Chr' b)       -> Str' $ a `T.snoc` b
                 (Chr' a, Str' b)       -> Str' $ a `T.cons` b
-                -- (Str' a, b)            -> Str' $ a `T.append` T.show b
-                -- (a, Str' b)            -> Str' $ (T.show a) `T.append` b
                 (Arr' t1 a, Arr' t2 b) ->
                   if t1 == t2
                   then Arr' t1 (a ++ b)
@@ -81,7 +74,6 @@ add gbs etp mem lhs rhs = do
                     files = map ((cdir ++) . ('/':)) fs
                     fcycle = cycle files
                   ca <- canonicalizePath a
-                  -- putStrLn $ show $ (dropWhile (/= ca) fcycle) !! (fromInteger b)
                   return $ maybe Nothing (\x -> Just (rbs, mr, Pth' $ x)) $ (dropWhile (/= ca) fcycle) !? (fromInteger b)
                 else do
                   putStrLn $ "Directory " ++ a ++ " does not exist."
@@ -120,7 +112,6 @@ sub gbs etp mem lhs rhs = do
                 (Int' a, Chr' b)       -> Just $ Int' $ a - (toInteger $ C.ord b)
                 (Chr' a, Int' b)       -> Just $ Chr' $ C.chr $ (C.ord a) - (fromInteger b)
                 (Chr' a, Chr' b)       -> Just $ Chr' $ C.chr $ (C.ord a) - (C.ord b)
-                -- (Bln' a, Bln' b)       -> Just $ Bln' $ a && b
                 (Str' a, Int' b)       -> Just $ Str' $ T.take (T.length a - fromInteger b) a
                 (Arr' t a, Int' b)       -> Just $ Arr' t $ take (length a - fromInteger b) a
                 (Str' a, Chr' b)       -> Just $ Str' $ T.filter (/= b) a
@@ -167,7 +158,6 @@ sub gbs etp mem lhs rhs = do
                 exists <- doesPathExist dir
                 if exists
                 then do
-                  -- files <- listDirectory dir
                   cdir <- canonicalizePath dir
                   fs <- listDirectory cdir
                   let
@@ -175,7 +165,6 @@ sub gbs etp mem lhs rhs = do
                     fcycle = cycle files
                   ca <- canonicalizePath a
                   return $ maybe Nothing (\x -> Just (rbs, mr, Pth' $ x)) $ (dropWhile (/= ca) fcycle) !? (fromInteger b)
-                  -- return $ Just (rbs, mr, Pth' $ (dropWhile (/= ca) fcycle) !! (fromInteger b))
                 else do
                   T.putStrLn $ "Directory " `T.append` (T.pack a) `T.append` " does not exist."
                   return Nothing
@@ -216,7 +205,6 @@ mpy gbs etp mem lhs rhs = do
                 (Chr' a, Int' b)       -> Just $ Str' $ T.pack $ replicate (fromInteger b) a
                 (Bln' a, Bln' b)       -> Just $ Bln' $ a && b
                 (Str' a, Int' b)       -> Just $ Str' $ T.concat $ replicate (fromInteger b) a
-                -- (Arr' t a, Int' b)     -> Just $ Arr' (Tarr t) $ map (Arr' t) (replicate (fromInteger b) a)
                 (Tup' a, Int' b)       -> Just $ Tup' $ map (Tup') (replicate (fromInteger b) a)
                 (Arr' t1 a, Arr' t2 b) ->
                   case sequence $ map (\i -> mpyv i (Arr' t2 b)) a of
@@ -298,7 +286,6 @@ dvd gbs etp mem lhs rhs = do
                 (Int' a, Flt' b)       -> Just $ Flt' $ (fromInteger a) / b
                 (Flt' a, Int' b)       -> Just $ Flt' $ a / (fromInteger b)
                 (Flt' a, Flt' b)       -> Just $ Flt' $ a / b
-          --       (Bln' a, Bln' b)       -> Just $ Bln' $ a && b
                 (Str' a, Int' b)       -> Just $ Arr' Tstr $ map (Str' . T.pack) (divList (fromInteger b) (T.unpack a))
                 (Arr' t a, Int' b)     -> Just $ Arr' (Tarr t) $ map (Arr' t) (divList (fromInteger b) a)
                 (Arr' t a, b)          ->

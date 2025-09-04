@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Tssl.Evaluate where
--- import Tssl.Token
+
 import Tssl.Data
 import Tssl.Parse
 import System.Directory
@@ -9,8 +9,6 @@ import Misc
 import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
--- import System.Directory
--- import System.IO
 
 -- Memory is a Map of Name -> Data
 --                         v seems like that to the outside
@@ -23,8 +21,6 @@ interpret b t mem (Expression _ opr left right) =
   case getMem mem opr of
     Nothing -> do
       T.putStrLn $ "Operator `" `T.append` opr `T.append` "` not defined"
-      -- putStrLn $ "Expression: " `T.append` show expr
-      -- putStrLn $ "Memory: " `T.append` show mem
       return Nothing
     Just dat ->
       case dat of
@@ -32,57 +28,44 @@ interpret b t mem (Expression _ opr left right) =
           putStrLn "Evaluation Error: Literal found at non-bottom level."
           return Nothing
         Op _ opmap -> do
-          -- case exp2typ mem left of
-          --   Nothing -> do
-          --     putStrLn $ "Can't infer the type of operation `" `T.append` opr `T.append` "`'s left-hand side at `" `T.append` show left `T.append` show opr `T.append` show right `T.append` "`."
-          --     return Nothing
-          --   Just lefts ->
-          --     case exp2typ mem right of
-          --       Nothing -> do
-          --         putStrLn $ "Can't infer the type of operation `" `T.append` opr `T.append` "`'s right-hand side at `" `T.append` show left `T.append` show opr `T.append` show right `T.append` "`."
-          --         return Nothing
-          --       Just rights ->
-                  let
-                    lefts = fromMaybe Tany (exp2typ mem left)
-                    rights = fromMaybe Tany (exp2typ mem right)
-                  case (tCollapse lefts, tCollapse rights) `lookupOp` opmap of
-                    Nothing -> do
-                      T.putStrLn $
-                        "Operator `" `T.append` opr `T.append` "` does not contain a variation that accepts type "
-                        `T.append` T.show lefts `T.append` " and " `T.append` T.show rights
-                      return Nothing
-                    Just (Base opfun _) -> do
-                      bout <- opfun b t mem left right
-                      case bout of
-                        Nothing -> return Nothing
-                        Just (b', mem', v') -> return $ Just (b', mem', vCollapse v')
-                    Just (Defined scopenum (names, optree) _) -> do
-                      left' <- interpret b lefts mem left
-                      case left' of
-                        Nothing -> return Nothing
-                        Just (b', mem', lefts') -> do
-                          right' <- interpret b' rights mem' right
-                          case right' of
+          let
+            lefts = fromMaybe Tany (exp2typ mem left)
+            rights = fromMaybe Tany (exp2typ mem right)
+          case (tCollapse lefts, tCollapse rights) `lookupOp` opmap of
+            Nothing -> do
+              T.putStrLn $
+                "Operator `" `T.append` opr `T.append` "` does not contain a variation that accepts type "
+                `T.append` T.show lefts `T.append` " and " `T.append` T.show rights
+              return Nothing
+            Just (Base opfun _) -> do
+              bout <- opfun b t mem left right
+              case bout of
+                Nothing -> return Nothing
+                Just (b', mem', v') -> return $ Just (b', mem', vCollapse v')
+            Just (Defined scopenum (names, optree) _) -> do
+              left' <- interpret b lefts mem left
+              case left' of
+                Nothing -> return Nothing
+                Just (b', mem', lefts') -> do
+                  right' <- interpret b' rights mem' right
+                  case right' of
+                    Nothing -> return Nothing
+                    Just (b'', mem'', rights') -> do
+                      let
+                        (unused, used) = splitAt (length mem'' - fromIntegral scopenum) mem''
+                        -- Input Values.
+                        vals = Tup' [vCollapse lefts', vCollapse rights']
+                        newmem = do
+                          ns <- zipVar names vals
+                          Just $ (M.fromList ns):used
+                      case newmem of
+                        Just nm -> do
+                          out <- interpret b'' t nm optree
+                          case out of
                             Nothing -> return Nothing
-                            Just (b'', mem'', rights') -> do
-                              let
-                                (unused, used) = splitAt (length mem'' - fromIntegral scopenum) mem''
-                                -- Input Values.
-                                vals = Tup' [vCollapse lefts', vCollapse rights']
-                                -- newmem = case zipVar names vals of
-                                --   Just ns -> Just $ (M.fromList ns):used
-                                --   Nothing -> Nothing
-                                newmem = do
-                                  ns <- zipVar names vals
-                                  Just $ (M.fromList ns):used
-                              case newmem of
-                                Just nm -> do
-                                  out <- interpret b'' t nm optree
-                                  case out of
-                                    Nothing -> return Nothing
-                                    -- Simple memory dropping. Might not work as intended.
-                                    Just (nb, frontmem, result) -> return $ Just (nb, unused ++ (drop 1 frontmem), vCollapse result)
-                                Nothing -> return Nothing
+                            -- Simple memory dropping. Might not work as intended.
+                            Just (nb, frontmem, result) -> return $ Just (nb, unused ++ (drop 1 frontmem), vCollapse result)
+                        Nothing -> return Nothing
 interpret b _ mem (Operand x) =
   case x of
     Wrd wrd ->
@@ -161,11 +144,7 @@ interpret b _ mem (Operand x) =
         Nothing   -> do
           T.putStrLn $ "Formatted String `" `T.append` T.show x `T.append` "` cannot be evaluated."
           return Nothing
-        -- Just (mem', fmt') -> return $ Just (mem', Str' $ concat $ map show fmt')
         Just (b', mem', fmt') -> return $ Just (b', mem', Str' $ T.concat (argify $ Tup' fmt'))
-        -- Just (b', mem', fmt') -> do
-          -- fmt'' <- argIO (map vCollapse fmt')
-          -- return $ Just (b', mem', Str' $ T.concat $ (fmt''))
     where
       handletup :: [Token] -> IO (Maybe (Bool, Memory, [Value]))
       handletup xs =
@@ -173,7 +152,6 @@ interpret b _ mem (Operand x) =
           then do
             -- DEBUG
             -- putStrLn $ "handling " `T.append` show (Tup xs)
-            -- tup <- ((interpret t $ newscope mem) . parse) xs
             tup <-
               case exp2typ mem (parse mem xs) of
                 Nothing -> do
@@ -250,17 +228,6 @@ interpret b _ mem (Operand x) =
                   Left  errtype      -> do
                     T.putStrLn $ "Some variable in tuple `" `T.append` T.show xs `T.append` "` of type `" `T.append` T.show errtype `T.append` "` does not contain a value."
                     return Nothing
-                
-            -- return $ sequence thing
-            
---   Var String | Opr Word8 String | Str String | Pth String | Int Integer | Chr Char | Bln Bool | Typ Type |
---   Tup [Token] | Arr [Token] | Fmt [Either String Token]
---   deriving (Eq, Ord, Show)
-
--- -- Strict form of token.
--- data Value =
---   Int' Integer | Flt' Double | Chr' Char | Str' String | Bln' Bool | Pth' String | Typ' Type |
---   Arr' Type [Value] | Tup' [Value]| Fmt' [Either Expression String] | None 
 
 -- This is "light interpretation" for type-checking functions.
 -- Also used for operator input matching.
@@ -271,11 +238,9 @@ exp2typ :: Memory -> Expression -> Maybe Type
 exp2typ mem (Operand x) =
   case collapse x of
     Tup [ ] -> Just $ Ttup []
-    -- Tup [a] -> Just [tok2typ mem a]
     Tup tup ->
       if hasOp mem tup
       then exp2typ mem (parse mem tup)
-      -- else Just $ tCollapse $ Ttup $ map (tok2typ mem) tup
       else
         case
           sequence $ map
